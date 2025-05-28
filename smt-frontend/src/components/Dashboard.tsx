@@ -3,7 +3,7 @@ import React from 'react';
 import PriceDisplay from './PriceDisplay';
 import SMTSignalsPanel from './SMTSignalsPanel';
 import KillzoneStatus from './KillzoneStatus';
-import SystemStatusPanel from './SystemStatusPanel';
+import SystemStatusPanel from './SystemPanel';
 import SettingsPanel from './SettingsPanel';
 import { MarketData, SMTSignal, KillzoneInfo, HealthStatus } from '../types';
 

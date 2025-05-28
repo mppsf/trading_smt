@@ -58,3 +58,62 @@ const SMTTradingDashboard: React.FC = () => {
 };
   
 export default SMTTradingDashboard;
+
+//todo
+// import React, { useState, useCallback } from 'react';
+// import { RefreshCw, Settings, AlertCircle, Bell, BellOff } from 'lucide-react';
+// import { useRealtimeData, useLocalStorage, useWebSocket } from './hooks';
+// import { 
+//   OptimizedPriceDisplay, 
+//   OptimizedSMTSignalsPanel, 
+//   OptimizedSystemPanel 
+// } from './components/optimized';
+// import { Card, StatusBadge, LoadingSpinner } from './components/ui';
+// import { SettingsPanel } from './components/SettingsPanel';
+
+// interface AppSettings {
+//   refreshInterval: number;
+//   enableNotifications: boolean;
+//   autoRefresh: boolean;
+//   theme: 'dark' | 'light';
+// }
+
+// const DEFAULT_SETTINGS: AppSettings = {
+//   refreshInterval: 5000,
+//   enableNotifications: true,
+//   autoRefresh: true,
+//   theme: 'dark'
+// };
+
+// export default function App() {
+//   const [appSettings, setAppSettings] = useLocalStorage<AppSettings>('smt-app-settings', DEFAULT_SETTINGS);
+//   const [showSettings, setShowSettings] = useState(false);
+//   const [notifications, setNotifications] = useState<string[]>([]);
+
+//   // Реал-тайм данные с настраиваемым интервалом
+//   const {
+//     marketData,
+//     smtSignals,
+//     killzoneInfo,
+//     healthStatus,
+//     loading,
+//     error,
+//     lastUpdate,
+//     refresh
+//   } = useRealtimeData(appSettings.autoRefresh ? appSettings.refreshInterval : 0);
+
+//   // WebSocket подключение для мгновенных обновлений
+//   const wsConnection = useWebSocket('ws://localhost:8000/ws', {
+//     onMessage: useCallback((data) => {
+//       if (data.type === 'smt_signal' && appSettings.enableNotifications) {
+//         const message = `New ${data.data.signal_type} signal detected!`;
+//         setNotifications(prev => [...prev.slice(-4), message]); // Храним последние 5
+        
+//         // Browser notification
+//         if ('Notification' in window && Notification.permission === 'granted') {
+//           new Notification('SMT Trading Alert', {
+//             body: message,
+//             icon: '/favicon.ico'
+//           });
+//         }
+      
