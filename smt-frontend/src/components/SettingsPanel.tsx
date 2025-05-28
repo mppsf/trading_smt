@@ -1,21 +1,72 @@
-import React, { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, AlertCircle } from 'lucide-react';
+// src/components/SettingsPanel.tsx - Улучшенная версия
+import React, { useEffect, useState, useCallback } from 'react';
+import { Settings as SettingsIcon, Check, AlertCircle, Info, Zap } from 'lucide-react';
+import { StatusBadge, Card } from '../ui';
 
 interface Settings {
   smt_strength_threshold: number;
   killzone_priorities: number[];
   refresh_interval: number;
   max_signals_display: number;
-  divergence_threshold?: number;
-  confirmation_candles?: number;
-  volume_multiplier?: number;
-  london_open?: string;
-  ny_open?: string;
-  asia_open?: string;
+  divergence_threshold: number;
+  confirmation_candles: number;
+  volume_multiplier: number;
 }
+
+// Конфигурация параметров для улучшенного UX
+const PARAM_CONFIG = {
+  // Активные параметры (используются в API)
+  active: {
+    smt_strength_threshold: {
+      label: 'Signal Strength',
+      desc: 'Minimum strength for signal detection (0.1-1.0)',
+      min: 0.1, max: 1.0, step: 0.1,
+      icon: <Zap className="w-4 h-4" />
+    },
+    max_signals_display: {
+      label: 'Max Signals',
+      desc: 'Maximum number of signals to display',
+      min: 10, max: 200, step: 10,
+      icon: <Info className="w-4 h-4" />
+    },
+    divergence_threshold: {
+      label: 'Divergence %',
+      desc: 'Minimum divergence percentage (1.0-10.0)',
+      min: 1.0, max: 10.0, step: 0.5,
+      icon: <AlertCircle className="w-4 h-4" />
+    },
+    confirmation_candles: {
+      label: 'Confirmation',
+      desc: 'Number of candles for confirmation (1-10)',
+      min: 1, max: 10, step: 1,
+      icon: <Check className="w-4 h-4" />
+    },
+    volume_multiplier: {
+      label: 'Volume Multiplier',
+      desc: 'Volume spike detection multiplier (1.0-5.0)',
+      min: 1.0, max: 5.0, step: 0.1,
+      icon: <Zap className="w-4 h-4" />
+    }
+  },
+  // Системные параметры
+  system: {
+    refresh_interval: {
+      label: 'Refresh Rate',
+      desc: 'Data update interval in seconds',
+      min: 5, max: 300, step: 5,
+      format: (val: number) => `${val/1000}s`
+    },
+    killzone_priorities: {
+      label: 'Session Priorities',
+      desc: 'Trading session priority levels (comma-separated)',
+      isArray: true
+    }
+  }
+} as const;
 
 const fetchSettings = async (): Promise<Settings> => {
   const response = await fetch('http://localhost:8000/api/v1/settings');
+  if (!response.ok) throw new Error('Failed to fetch settings');
   return response.json();
 };
 
@@ -25,18 +76,14 @@ const updateSettings = async (payload: Settings): Promise<Settings> => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  if (!response.ok) throw new Error('Failed to update settings');
   return response.json();
 };
 
 const SettingsPanel: React.FC = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [status, setStatus] = useState({ saving: false, error: '', success: false });
-
-  // Активные параметры (используются в fetchSMTSignals)
-  const activeParams = ['max_signals_display', 'smt_strength_threshold'];
-  
-  // Исключенные параметры (время сессий)
-  const excludedParams = ['london_open', 'ny_open', 'asia_open'];
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     fetchSettings()
@@ -44,137 +91,172 @@ const SettingsPanel: React.FC = () => {
       .catch(() => setStatus(prev => ({ ...prev, error: 'Failed to load settings' })));
   }, []);
 
-  const handleChange = (key: keyof Settings, value: string) => {
+  const handleChange = useCallback((key: keyof Settings, value: string) => {
     if (!settings) return;
-    let newValue: any = value;
     
-    if (Array.isArray(settings[key])) {
-      newValue = value
-        .split(',')
-        .map(s => parseFloat(s.trim().replace(',', '.')))
-        .filter(n => !isNaN(n));
+    let parsedValue: any = value;
+    const config = PARAM_CONFIG.active[key as keyof typeof PARAM_CONFIG.active] || 
+                  PARAM_CONFIG.system[key as keyof typeof PARAM_CONFIG.system];
+    
+    if (config?.isArray) {
+      parsedValue = value.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
     } else if (typeof settings[key] === 'number') {
-      newValue = value;
+      parsedValue = parseFloat(value) || 0;
     }
     
-    setSettings(prev => prev ? { ...prev, [key]: newValue } : prev);
-  };
+    setSettings(prev => prev ? { ...prev, [key]: parsedValue } : prev);
+    setIsDirty(true);
+  }, [settings]);
 
   const handleSave = async () => {
-    if (!settings) return;
-    
-    const sanitizedSettings: Settings = Object.fromEntries(
-      Object.entries(settings).map(([key, value]) => {
-        if (Array.isArray(value)) {
-          return [key, value];
-        } else if (typeof value === 'string') {
-          const parsed = parseFloat(value);
-          return [key, isNaN(parsed) ? 0 : parsed];
-        }
-        return [key, value];
-      })
-    ) as Settings;
+    if (!settings || !isDirty) return;
     
     setStatus({ saving: true, error: '', success: false });
     try {
-      await updateSettings(sanitizedSettings);
+      await updateSettings(settings);
       setStatus({ saving: false, error: '', success: true });
-      setTimeout(() => setStatus(prev => ({ ...prev, success: false })), 2000);
-    } catch {
-      setStatus({ saving: false, error: 'Failed to save settings', success: false });
+      setIsDirty(false);
+      setTimeout(() => setStatus(prev => ({ ...prev, success: false })), 3000);
+    } catch (error) {
+      setStatus({ 
+        saving: false, 
+        error: error instanceof Error ? error.message : 'Save failed', 
+        success: false 
+      });
     }
   };
 
-  const formatKeyName = (key: string): string => {
-    return key
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (char) => char ? char.toUpperCase() : '');
-  };
+  const renderParamGroup = (
+    title: string, 
+    params: Record<string, any>, 
+    isActive = true
+  ) => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-md font-medium text-white">{title}</h4>
+        <StatusBadge 
+          status={isActive ? 'success' : 'warning'} 
+          size="sm"
+          withDot
+        >
+          {isActive ? 'Active' : 'System'}
+        </StatusBadge>
+      </div>
+      
+      {Object.entries(params).map(([key, config]) => {
+        if (!settings || !(key in settings)) return null;
+        
+        const value = settings[key as keyof Settings];
+        const displayValue = config.isArray 
+          ? Array.isArray(value) ? value.join(',') : String(value)
+          : String(value);
 
-  const getDisplayValue = (value: any): string => {
-    if (value === null || value === undefined) return '';
-    if (Array.isArray(value)) return value.join(',');
-    return String(value);
-  };
-
-  const isActive = (key: string) => activeParams.includes(key);
-  const isExcluded = (key: string) => excludedParams.includes(key);
+        return (
+          <div key={key} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                {config.icon}
+                <label className="text-sm font-medium text-gray-200">
+                  {config.label}
+                </label>
+              </div>
+              {config.format && typeof value === 'number' && (
+                <span className="text-xs text-blue-400 font-mono">
+                  {config.format(value)}
+                </span>
+              )}
+            </div>
+            
+            <input
+              type={config.isArray ? 'text' : 'number'}
+              value={displayValue}
+              onChange={e => handleChange(key as keyof Settings, e.target.value)}
+              min={config.min}
+              max={config.max}
+              step={config.step}
+              className={`w-full bg-gray-800 text-white border rounded-lg px-3 py-2 text-sm 
+                focus:outline-none focus:ring-2 focus:border-transparent transition-all
+                ${isActive 
+                  ? 'border-gray-600 focus:ring-blue-500' 
+                  : 'border-yellow-600 focus:ring-yellow-500'
+                }`}
+              placeholder={config.isArray ? "1,2,3" : "Enter value"}
+            />
+            
+            <p className="text-xs text-gray-400">{config.desc}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   if (!settings) {
     return (
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-        <div className="text-gray-400">Loading settings...</div>
-      </div>
+      <Card className="animate-pulse">
+        <div className="h-6 bg-gray-700 rounded mb-4"></div>
+        <div className="space-y-3">
+          {[1,2,3].map(i => (
+            <div key={i} className="h-4 bg-gray-700 rounded"></div>
+          ))}
+        </div>
+      </Card>
     );
   }
 
-  const filteredSettings = Object.entries(settings).filter(([key]) => !isExcluded(key));
-
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
-      <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-        <SettingsIcon className="w-5 h-5 mr-2 text-orange-400" />
-        SMT Settings
-      </h3>
-
-      <div className="space-y-4">
-        {filteredSettings.map(([key, value]) => (
-          <div key={key} className="flex flex-col">
-            <div className="flex items-center mb-1">
-              <label className="text-gray-300 text-sm font-medium">
-                {formatKeyName(key)}
-              </label>
-              {isActive(key) ? (
-                <span className="ml-2 px-2 py-0.5 bg-green-600 text-white text-xs rounded">
-                  Active
-                </span>
-              ) : (
-                <div className="ml-2 flex items-center">
-                  <AlertCircle className="w-3 h-3 text-yellow-500 mr-1" />
-                  <span className="px-2 py-0.5 bg-yellow-600 text-white text-xs rounded">
-                    Unused
-                  </span>
-                </div>
-              )}
-            </div>
-            <input
-              type="text"
-              value={getDisplayValue(value)}
-              onChange={e => handleChange(key as keyof Settings, e.target.value)}
-              placeholder={Array.isArray(value) ? "Enter comma-separated values" : "Enter value"}
-              className={`bg-gray-800 text-white border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
-                isActive(key) 
-                  ? 'border-gray-700 focus:ring-blue-500' 
-                  : 'border-yellow-600 focus:ring-yellow-500'
-              }`}
-              disabled={!isActive(key)}
-            />
-            {Array.isArray(value) && (
-              <span className="text-xs text-gray-500 mt-1">
-                Separate multiple values with commas
-              </span>
-            )}
-            {!isActive(key) && (
-              <span className="text-xs text-yellow-400 mt-1">
-                This parameter is not currently used by the system
-              </span>
-            )}
-          </div>
-        ))}
+    <Card>
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-semibold text-white flex items-center">
+          <SettingsIcon className="w-5 h-5 mr-2 text-orange-400" />
+          SMT Configuration
+        </h3>
+        {isDirty && (
+          <StatusBadge status="warning" size="sm">
+            Unsaved changes
+          </StatusBadge>
+        )}
       </div>
 
-      <div className="flex items-center justify-end mt-6 space-x-4">
-        {status.error && <span className="text-red-400 text-sm">{status.error}</span>}
-        {status.success && <span className="text-green-400 text-sm">Saved!</span>}
+      <div className="space-y-8">
+        {renderParamGroup('Signal Detection', PARAM_CONFIG.active, true)}
+        {renderParamGroup('System Settings', PARAM_CONFIG.system, false)}
+      </div>
+
+      <div className="flex items-center justify-between pt-6 mt-6 border-t border-gray-700">
+        <div className="flex items-center space-x-4 text-sm">
+          {status.error && (
+            <StatusBadge status="error" size="sm">
+              {status.error}
+            </StatusBadge>
+          )}
+          {status.success && (
+            <StatusBadge status="success" size="sm">
+              Settings saved!
+            </StatusBadge>
+          )}
+        </div>
+        
         <button
           onClick={handleSave}
-          disabled={status.saving}
-          className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white font-medium rounded px-4 py-2 text-sm transition-colors"
+          disabled={status.saving || !isDirty}
+          className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 
+            disabled:from-gray-600 disabled:to-gray-700 text-white font-medium rounded-lg transition-all duration-200
+            flex items-center space-x-2 disabled:cursor-not-allowed"
         >
-          {status.saving ? 'Saving...' : 'Save'}
+          {status.saving ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Saving...</span>
+            </>
+          ) : (
+            <>
+              <Check className="w-4 h-4" />
+              <span>Save Changes</span>
+            </>
+          )}
         </button>
       </div>
-    </div>
+    </Card>
   );
 };
 
