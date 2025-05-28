@@ -26,25 +26,36 @@ const SMTTradingDashboard: React.FC = () => {
       ]);
 
       const marketObj: Record<string, MarketData> = {};
-      if (market.status === 'fulfilled') {
+      if (market.status === 'fulfilled' && Array.isArray(market.value)) {
         market.value.forEach(item => {
           marketObj[item.symbol] = item;
         });
       }
 
+      // Ensure signals is always an array
+      let signalsArray: SMTSignal[] = [];
+      if (signals.status === 'fulfilled' && Array.isArray(signals.value)) {
+        signalsArray = signals.value;
+      } else if (signals.status === 'rejected') {
+        console.error('Failed to fetch SMT signals:', signals.reason);
+      }
+
       setState(prev => ({
         ...prev,
         marketData: marketObj,
-        smtSignals: signals.status === 'fulfilled' ? signals.value : prev.smtSignals,
+        smtSignals: signalsArray,
         killzoneInfo: killzone.status === 'fulfilled' ? killzone.value : prev.killzoneInfo,
         healthStatus: health.status === 'fulfilled' ? health.value : prev.healthStatus,
         loading: false,
       }));
     } catch (err) {
+      console.error('Error in loadData:', err);
       setState(prev => ({
         ...prev,
         error: err instanceof Error ? err.message : 'Failed to load data',
         loading: false,
+        // Ensure we maintain empty array for signals even on error
+        smtSignals: Array.isArray(prev.smtSignals) ? prev.smtSignals : [],
       }));
     }
   }, []);
@@ -52,9 +63,12 @@ const SMTTradingDashboard: React.FC = () => {
   const refreshSignals = useCallback(async () => {
     try {
       const signals = await fetchSMTSignals();
-      setState(prev => ({ ...prev, smtSignals: signals }));
+      // Ensure the fetched signals is an array
+      const signalsArray = Array.isArray(signals) ? signals : [];
+      setState(prev => ({ ...prev, smtSignals: signalsArray }));
     } catch (err) {
       console.error('Failed to refresh signals:', err);
+      // Don't reset signals on refresh error, just log it
     }
   }, []);
 

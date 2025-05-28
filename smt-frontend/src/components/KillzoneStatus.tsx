@@ -54,7 +54,7 @@ const KillzoneStatus: React.FC<KillzoneStatusProps> = ({ info }) => (
             info.priority === 'medium' ? 'bg-yellow-900 text-yellow-400' :
             'bg-gray-800 text-gray-400'
           }`}>
-            {info.priority.toUpperCase()}
+            {info.priority?.toUpperCase()}
           </div>
         </div>
       </div>
