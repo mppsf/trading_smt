@@ -1,0 +1,26 @@
+# Development Dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Устанавливаем зависимости для hot reload
+RUN apk add --no-cache git
+
+# Копируем package.json
+COPY package*.json ./
+
+# Устанавливаем все зависимости (включая dev)
+RUN npm install --legacy-peer-deps
+
+# Копируем исходный код
+COPY . .
+
+# Открываем порт
+EXPOSE 3000
+
+# Настраиваем переменные для hot reload
+ENV WATCHPACK_POLLING=true
+ENV CHOKIDAR_USEPOLLING=true
+
+# Запускаем dev сервер
+CMD ["npm", "start"]
