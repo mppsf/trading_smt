@@ -1,62 +1,56 @@
-import React, { memo } from 'react';
-import { ArrowUp, ArrowDown, TrendingUp } from 'lucide-react';
-import { MarketData } from '../../types';
-import { Card, StatusBadge } from '../ui';
+// src/components/Dashboard.tsx
+import React from 'react';
+import PriceDisplay from './PriceDisplay';
+import SMTSignalsPanel from './SMTSignalsPanel';
+import KillzoneStatus from './KillzoneStatus';
+import SystemStatusPanel from './SystemPanel';
+import SettingsPanel from './SettingsPanel';
+import { MarketData, SMTSignal, KillzoneInfo, HealthStatus } from '../types';
 
-interface PriceDisplayProps {
-  data: MarketData;
+interface DashboardProps {
+  marketData: Record<string, MarketData>;
+  smtSignals: SMTSignal[];
+  killzoneInfo: KillzoneInfo | null;
+  healthStatus: HealthStatus | null;
+  onRefreshSignals: () => void;
 }
 
-export const PriceDisplay = memo<PriceDisplayProps>(({ data }) => {
-  const isPositive = data.change_percent >= 0;
-  const isSignificantChange = Math.abs(data.change_percent) > 1;
-
-  return (
-    <Card 
-      variant={isSignificantChange ? 'gradient' : 'default'}
-      className="hover:scale-105 cursor-pointer"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <h3 className="text-lg font-semibold text-white">{data.symbol}</h3>
-          {data.market_state && (
-            <StatusBadge 
-              status={data.market_state === 'open' ? 'success' : 'neutral'}
-              size="sm"
-            >
-              {data.market_state}
-            </StatusBadge>
+const Dashboard: React.FC<DashboardProps> = ({ 
+  marketData, 
+  smtSignals, 
+  killzoneInfo, 
+  healthStatus, 
+  onRefreshSignals 
+}) => (
+  <main className="max-w-7xl mx-auto px-4 py-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Левая и центральная часть */}
+      <div className="lg:col-span-2 space-y-6">
+        {/* Рыночные данные */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.keys(marketData).length === 0 ? (
+            <div className="col-span-2 bg-gray-900 border border-gray-700 rounded-xl p-8 text-center">
+              <div className="text-gray-400">No market data available</div>
+            </div>
+          ) : (
+            Object.values(marketData).map(data => (
+              <PriceDisplay key={data.symbol} data={data} />
+            ))
           )}
         </div>
         
-        <StatusBadge 
-          status={isPositive ? 'success' : 'error'}
-          withDot
-        >
-          {isPositive ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
-          {Math.abs(data.change_percent).toFixed(2)}%
-        </StatusBadge>
+        {/* SMT Сигналы - отдельной строкой */}
+        <SMTSignalsPanel signals={smtSignals} onRefresh={onRefreshSignals} />
       </div>
       
-      <div className="space-y-3">
-        <div className="text-3xl font-bold text-white flex items-baseline">
-          ${data.current_price.toFixed(2)}
-          {isSignificantChange && (
-            <TrendingUp className="w-5 h-5 ml-2 text-blue-400" />
-          )}
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="text-gray-400">
-            Volume: {data.volume?.toLocaleString() || 'N/A'}
-          </div>
-          <div className="text-gray-500 text-right">
-            {new Date(data.timestamp).toLocaleTimeString()}
-          </div>
-        </div>
+      {/* Правая часть: статусы и настройки */}
+      <div className="space-y-6">
+        <SystemStatusPanel health={healthStatus} />
+        <KillzoneStatus info={killzoneInfo} />
+        <SettingsPanel />
       </div>
-    </Card>
-  );
-});
+    </div>
+  </main>
+);
 
-PriceDisplay.displayName = 'PriceDisplay';
+export default Dashboard;

@@ -1,7 +1,7 @@
+// src/components/SMTSignalsPanel.tsx
 import React, { memo, useMemo } from 'react';
 import { Zap, RefreshCw, Filter } from 'lucide-react';
-import { SMTSignal } from '../../types';
-import { Card, StatusBadge, EmptyState, LoadingSpinner } from '../ui';
+import { SMTSignal } from '../types';
 
 interface SMTSignalsPanelProps {
   signals: SMTSignal[];
@@ -24,9 +24,13 @@ const SignalCard = memo<{ signal: SMTSignal; index: number }>(({ signal, index }
   return (
     <div className={`p-4 rounded-lg border-l-4 transition-all hover:shadow-lg ${signalConfig.bgColor}`}>
       <div className="flex items-center justify-between mb-3">
-        <StatusBadge status={signalConfig.status} size="sm">
+        <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
+          signalConfig.status === 'success' ? 'bg-green-900 text-green-400' :
+          signalConfig.status === 'error' ? 'bg-red-900 text-red-400' :
+          'bg-gray-800 text-gray-400'
+        }`}>
           {signal.signal_type.replace('_', ' ').toUpperCase()}
-        </StatusBadge>
+        </span>
         <span className="text-xs text-gray-400">
           {new Date(signal.timestamp).toLocaleTimeString()}
         </span>
@@ -46,21 +50,19 @@ const SignalCard = memo<{ signal: SMTSignal; index: number }>(({ signal, index }
         <span>S&P500: ${signal.sp500_price.toFixed(2)}</span>
       </div>
       
-      <StatusBadge
-        status={signal.confirmation_status ? 'success' : 'warning'}
-        size="sm"
-        withDot
-        className="mt-2"
-      >
+      <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full mt-2 ${
+        signal.confirmation_status ? 'bg-green-900 text-green-400' : 'bg-yellow-900 text-yellow-400'
+      }`}>
+        <span className="w-2 h-2 rounded-full bg-current mr-2"></span>
         {signal.confirmation_status ? 'Confirmed' : 'Pending'}
-      </StatusBadge>
+      </span>
     </div>
   );
 });
 
 SignalCard.displayName = 'SignalCard';
 
-export const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ 
+const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ 
   signals, 
   onRefresh, 
   loading = false 
@@ -68,14 +70,14 @@ export const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({
   const recentSignals = useMemo(() => signals.slice(-6), [signals]);
 
   return (
-    <Card className="w-full">
+    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-white flex items-center">
           <Zap className="w-5 h-5 mr-2 text-blue-400" />
           SMT Signals
-          <StatusBadge status="info" size="sm" className="ml-3">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-900 text-blue-400 ml-3">
             {signals.length} total
-          </StatusBadge>
+          </span>
         </h3>
         
         <div className="flex items-center space-x-2">
@@ -92,7 +94,7 @@ export const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({
             title="Refresh SMT Signals"
           >
             {loading ? (
-              <LoadingSpinner size="sm" />
+              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
             ) : (
               <RefreshCw className="w-4 h-4" />
             )}
@@ -101,15 +103,19 @@ export const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({
       </div>
 
       {recentSignals.length === 0 ? (
-        <EmptyState
-          icon={<Zap className="w-12 h-12" />}
-          title="No Active SMT Signals"
-          description="Waiting for market divergence patterns to emerge"
-          action={{
-            label: "Refresh Now",
-            onClick: onRefresh
-          }}
-        />
+        <div className="text-center py-12">
+          <div className="text-gray-500 mb-4 flex justify-center">
+            <Zap className="w-12 h-12" />
+          </div>
+          <h3 className="text-lg font-medium text-white mb-2">No Active SMT Signals</h3>
+          <p className="text-gray-400 mb-6 max-w-sm mx-auto">Waiting for market divergence patterns to emerge</p>
+          <button
+            onClick={onRefresh}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Refresh Now
+          </button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
           {recentSignals.map((signal, index) => (
@@ -117,8 +123,9 @@ export const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({
           ))}
         </div>
       )}
-    </Card>
+    </div>
   );
 });
 
 SMTSignalsPanel.displayName = 'SMTSignalsPanel';
+export default SMTSignalsPanel;
