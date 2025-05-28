@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import logging
 
 from app.schemas.schemas import (
@@ -9,6 +9,7 @@ from app.schemas.schemas import (
 )
 from app.services.market_data_collector import MarketDataCollector
 from app.services.smart_money_service import SmartMoneyService
+from app.services.killzone_service import KillzoneService
 from app.core.data_models import OHLCV
 from app.utils.market_utils import get_current_market_phase
 
@@ -28,12 +29,38 @@ def convert_snapshot_to_ohlcv(snapshot_data):
         ) for item in snapshot_data.ohlcv_15m]
     return []
 
+def get_killzone_priority(killzone_name: str) -> int:
+    """Получить приоритет киллзоны по имени"""
+    priority_map = {
+        "Asia Open": 1,
+        "London Open": 2, 
+        "London Close": 3,
+        "New York Open": 4,
+        "New York Close": 5
+    }
+    return priority_map.get(killzone_name, 6)
+
+def is_signal_in_time_window(signal_timestamp: str, time_window_minutes: int) -> bool:
+    """Проверить, попадает ли сигнал в временное окно"""
+    if time_window_minutes <= 0:
+        return True
+    
+    try:
+        signal_time = datetime.fromisoformat(signal_timestamp.replace('Z', '+00:00'))
+        current_time = datetime.now(timezone.utc)
+        time_diff = current_time - signal_time
+        return time_diff <= timedelta(minutes=time_window_minutes)
+    except:
+        return True
+
 @router.get("/smt-signals", response_model=SMTAnalysisResponse)
 async def get_smt_signals(
     limit: int = Query(50, description="Максимальное количество сигналов"),
     signal_type: Optional[str] = Query(None, description="Фильтр по типу сигнала"),
     min_strength: Optional[float] = Query(None, ge=0.0, le=1.0, description="Минимальная сила сигнала"),
     confirmed_only: bool = Query(False, description="Только подтвержденные сигналы"),
+    min_killzone_priority: Optional[int] = Query(None, ge=1, le=5, description="Минимальный приоритет киллзоны"),
+    time_window_minutes: Optional[int] = Query(None, ge=0, description="Временное окно в минутах (0 = без ограничений)"),
     # Settings parameters
     smt_strength_threshold: Optional[float] = Query(None, ge=0.0, le=1.0, description="Порог силы SMT сигналов"),
     divergence_threshold: Optional[float] = Query(None, ge=0.0, le=5.0, description="Порог дивергенции %"),
@@ -84,6 +111,10 @@ async def get_smt_signals(
         if not es_data or not nq_data:
             raise HTTPException(status_code=404, detail="Market data not available")
 
+        # Получаем информацию о киллзонах
+        killzone_service = KillzoneService()
+        killzones = await killzone_service.get_killzones()
+        
         # Создаем сервис с кастомными параметрами
         smt_service = SmartMoneyService()
         
@@ -108,7 +139,7 @@ async def get_smt_signals(
             # Используем кешированные сигналы
             signals = await smt_service.get_cached_signals(limit)
 
-        # Применяем дополнительные фильтры
+        # Применяем фильтры
         filtered_signals = signals
         
         if signal_type:
@@ -119,6 +150,35 @@ async def get_smt_signals(
         
         if confirmed_only:
             filtered_signals = [s for s in filtered_signals if getattr(s, 'confirmed', False)]
+            
+        # Фильтр по временному окну
+        if time_window_minutes is not None and time_window_minutes > 0:
+            filtered_signals = [s for s in filtered_signals 
+                              if is_signal_in_time_window(s.timestamp, time_window_minutes)]
+        
+        # Фильтр по приоритету киллзоны
+        if min_killzone_priority is not None:
+            # Предполагаем, что в сигнале есть информация о киллзоне
+            # Если нет, то определяем по времени сигнала
+            current_time = datetime.now(timezone.utc).time()
+            current_killzone = None
+            
+            for kz in killzones:
+                start_time = datetime.strptime(kz.start_time, "%H:%M:%S").time()
+                end_time = datetime.strptime(kz.end_time, "%H:%M:%S").time()
+                
+                if start_time <= current_time <= end_time:
+                    current_killzone = kz.name
+                    break
+            
+            if current_killzone:
+                current_priority = get_killzone_priority(current_killzone)
+                if current_priority >= min_killzone_priority:
+                    # Фильтруем сигналы только если текущая киллзона имеет достаточный приоритет
+                    pass
+                else:
+                    # Если текущая киллзона не проходит фильтр, возвращаем пустой результат
+                    filtered_signals = []
 
         # Ограничиваем количество результатов
         final_limit = min(limit, analysis_params.get('max_signals_display', limit))
@@ -190,86 +250,3 @@ async def get_smt_stats():
     except Exception as e:
         logger.error(f"Error getting SMT stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/true-opens", response_model=TrueOpensResponse)
-async def get_true_opens():
-    try:
-        market_collector = MarketDataCollector()
-        
-        es_data = await market_collector.get_symbol_data('ES=F')
-        nq_data = await market_collector.get_symbol_data('NQ=F')
-        
-        if not es_data or not nq_data:
-            raise HTTPException(status_code=404, detail="Market data not available")
-        
-        timestamp = datetime.now(timezone.utc).isoformat()
-        es_price = es_data.current_price
-        nq_price = nq_data.current_price
-        
-        return TrueOpensResponse(
-            es_opens=TrueOpenResponse(
-                daily=es_price,
-                weekly=es_price,
-                quarterly=es_price,
-                timestamp=timestamp
-            ),
-            nq_opens=TrueOpenResponse(
-                daily=nq_price,
-                weekly=nq_price,
-                quarterly=nq_price,
-                timestamp=timestamp
-            )
-        )
-        
-    except Exception as e:
-        logger.error(f"Error getting True Opens: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/fractals", response_model=List[FractalsResponse])
-async def get_fractals(
-    symbols: str = Query("ES=F,NQ=F", description="Символы через запятую"),
-    period: int = Query(15, description="Период для детекции фракталов")
-):
-    try:
-        market_collector = MarketDataCollector()
-        smt_service = SmartMoneyService()
-        
-        symbol_list = [s.strip() for s in symbols.split(",")]
-        result = []
-        
-        for symbol in symbol_list:
-            cached_data = await market_collector.get_symbol_data(symbol)
-            if not cached_data:
-                continue
-            
-            ohlcv_data = convert_snapshot_to_ohlcv(cached_data)
-            high_fractals, low_fractals = smt_service.smt_analyzer._get_fractals(ohlcv_data, 2)
-            
-            result.append(FractalsResponse(
-                symbol=symbol,
-                high_fractals=[
-                    FractalPoint(
-                        timestamp=f[2] if len(f) > 2 else datetime.now(timezone.utc).isoformat(),
-                        price=f[1],
-                        type="high",
-                        index=f[0]
-                    ) for f in high_fractals
-                ],
-                low_fractals=[
-                    FractalPoint(
-                        timestamp=f[2] if len(f) > 2 else datetime.now(timezone.utc).isoformat(),
-                        price=f[1],
-                        type="low",
-                        index=f[0]
-                    ) for f in low_fractals
-                ],
-                timestamp=datetime.now(timezone.utc).isoformat()
-            ))
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"Error getting fractals: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
