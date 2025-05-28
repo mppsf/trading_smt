@@ -11,11 +11,10 @@ import {
   FractalsResponse,
   VolumeAnomalyResponse,
   AnalysisStatsResponse,
-  SMTAnalysisFilter,
-  ApiResponse
+  SMTAnalysisFilter
 } from '../types';
 
-const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const BASE = 'http://localhost:8000';
 
 // Централизованная обработка ошибок API
 class ApiError extends Error {
@@ -29,39 +28,37 @@ class ApiError extends Error {
   }
 }
 
-// Базовая функция для выполнения HTTP запросов
+// Базовая функция для выполнения HTTP запросов с обработкой ошибок
 async function apiRequest<T>(
-  endpoint: string, 
+  url: string, 
   options?: RequestInit
 ): Promise<T> {
-  const url = `${BASE_URL}${endpoint}`;
-  
   try {
     const response = await fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
         ...options?.headers,
       },
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
       let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
       
       try {
-        const errorData = await response.json();
-        errorMessage = errorData.detail || errorData.message || errorMessage;
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.detail || errorMessage;
       } catch {
-        const errorText = await response.text();
+        // Если не JSON, используем текст как есть
         errorMessage = errorText || errorMessage;
       }
       
-      throw new ApiError(errorMessage, response.status);
+      throw new ApiError(errorMessage, response.status, errorText);
     }
 
     const contentType = response.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
+    if (contentType && contentType.includes('application/json')) {
       return await response.json();
     }
     
@@ -73,44 +70,32 @@ async function apiRequest<T>(
     
     // Обработка сетевых ошибок
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new ApiError('Сервер недоступен. Проверьте подключение к интернету.', 0);
+      throw new ApiError('Ошибка сети: сервер недоступен', 0);
     }
     
     throw new ApiError(`Неожиданная ошибка: ${error}`, 0);
   }
 }
 
-// ===========================================
-// Market Data API
-// ===========================================
-
+// Получение рыночных данных согласно бэкенду MarketDataResponse
 export async function fetchMarketData(
-  symbols: string = 'QQQ,SPY', 
-  timeframe: string = '5m', 
-  limit: number = 100
+  symbols: string, 
+  timeframe = '5m', 
+  limit = 100
 ): Promise<MarketData[]> {
-  const params = new URLSearchParams({
-    symbols,
-    timeframe,
-    limit: limit.toString()
-  });
-  
-  return apiRequest<MarketData[]>(`/api/v1/market-data?${params}`);
+  const url = `${BASE}/api/v1/market-data?symbols=${symbols}&timeframe=${timeframe}&limit=${limit}`;
+  return apiRequest<MarketData[]>(url);
 }
 
-// ===========================================
-// SMT Analysis API
-// ===========================================
-
+// Получение SMT сигналов согласно бэкенду SMTAnalysisResponse
 export async function fetchSMTSignals(
-  limit: number = 50,
+  limit = 50,
   filter?: SMTAnalysisFilter
 ): Promise<SMTAnalysisResponse> {
-  const params = new URLSearchParams({
-    limit: limit.toString()
-  });
+  let url = `${BASE}/api/v1/smt-signals?limit=${limit}`;
   
   if (filter) {
+    const params = new URLSearchParams();
     if (filter.signal_types?.length) {
       params.append('signal_types', filter.signal_types.join(','));
     }
@@ -126,130 +111,81 @@ export async function fetchSMTSignals(
     if (filter.time_to) {
       params.append('time_to', filter.time_to);
     }
+    
+    if (params.toString()) {
+      url += `&${params.toString()}`;
+    }
   }
   
-  return apiRequest<SMTAnalysisResponse>(`/api/v1/smt-analysis?${params}`);
+  return apiRequest<SMTAnalysisResponse>(url);
 }
 
-// Backwards compatibility - возвращает только массив сигналов
-export async function fetchSMTSignalsLegacy(limit: number = 50): Promise<SMTSignal[]> {
-  const response = await fetchSMTSignals(limit);
-  return response.signals;
-}
-
-// ===========================================
-// Killzones API
-// ===========================================
-
+// Получение killzones согласно бэкенду
 export async function fetchKillzones(): Promise<KillzonesResponse> {
-  return apiRequest<KillzonesResponse>('/api/v1/killzones');
+  const url = `${BASE}/api/v1/killzones`;
+  return apiRequest<KillzonesResponse>(url);
 }
 
-export async function fetchCurrentKillzone(): Promise<KillzoneInfo | null> {
-  try {
-    const response = await fetchKillzones();
-    return response.current_session || 
-           response.killzones.find(kz => kz.is_active) || 
-           null;
-  } catch (error) {
-    console.warn('Error fetching current killzone:', error);
-    return null;
-  }
+// Получение health статуса согласно бэкенду HealthResponse
+export async function fetchHealth(): Promise<HealthStatus> {
+  const url = `${BASE}/health`;
+  return apiRequest<HealthStatus>(url);
 }
 
-// ===========================================
-// True Opens API
-// ===========================================
-
+// Получение True Opens согласно бэкенду
 export async function fetchTrueOpens(): Promise<TrueOpensResponse> {
-  return apiRequest<TrueOpensResponse>('/api/v1/true-opens');
+  const url = `${BASE}/api/v1/true-opens`;
+  return apiRequest<TrueOpensResponse>(url);
 }
 
-// ===========================================
-// Fractals API
-// ===========================================
-
-export async function fetchFractals(
-  symbol: string, 
-  limit: number = 50,
-  timeframe: string = '5m'
-): Promise<FractalsResponse> {
-  const params = new URLSearchParams({
-    symbol,
-    limit: limit.toString(),
-    timeframe
-  });
-  
-  return apiRequest<FractalsResponse>(`/api/v1/fractals?${params}`);
+// Получение фракталов согласно бэкенду
+export async function fetchFractals(symbol: string, limit = 50): Promise<FractalsResponse> {
+  const url = `${BASE}/api/v1/fractals?symbol=${symbol}&limit=${limit}`;
+  return apiRequest<FractalsResponse>(url);
 }
 
-// ===========================================
-// Volume Anomalies API
-// ===========================================
-
+// Получение аномалий объема согласно бэкенду
 export async function fetchVolumeAnomalies(
   symbol: string, 
-  limit: number = 50
+  limit = 50
 ): Promise<VolumeAnomalyResponse[]> {
-  const params = new URLSearchParams({
-    symbol,
-    limit: limit.toString()
-  });
-  
-  return apiRequest<VolumeAnomalyResponse[]>(`/api/v1/volume-anomalies?${params}`);
+  const url = `${BASE}/api/v1/volume-anomalies?symbol=${symbol}&limit=${limit}`;
+  return apiRequest<VolumeAnomalyResponse[]>(url);
 }
 
-// ===========================================
-// Analysis Stats API
-// ===========================================
-
+// Получение статистики анализа согласно бэкенду
 export async function fetchAnalysisStats(): Promise<AnalysisStatsResponse> {
-  return apiRequest<AnalysisStatsResponse>('/api/v1/analysis-stats');
+  const url = `${BASE}/api/v1/analysis-stats`;
+  return apiRequest<AnalysisStatsResponse>(url);
 }
 
-// ===========================================
-// Health Check API
-// ===========================================
-
-export async function fetchHealth(): Promise<HealthStatus> {
-  return apiRequest<HealthStatus>('/health');
+// Настройки (пока не определены в бэкенде, но используются в коде)
+export async function fetchSettings(): Promise<Settings> {
+  const url = `${BASE}/api/v1/settings`;
+  return apiRequest<Settings>(url);
 }
 
+export async function updateSettings(payload: Partial<Settings>): Promise<Settings> {
+  const url = `${BASE}/api/v1/settings`;
+  return apiRequest<Settings>(url, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+// Дополнительные утилиты для работы с API
+
+// Проверка доступности API
 export async function checkApiHealth(): Promise<boolean> {
   try {
-    const health = await fetchHealth();
-    return health.status === 'healthy';
+    await fetchHealth();
+    return true;
   } catch {
     return false;
   }
 }
 
-// ===========================================
-// Settings API (если будет реализован в бэкенде)
-// ===========================================
-
-export async function fetchSettings(): Promise<Settings> {
-  // Временная заглушка до реализации в бэкенде
-  return Promise.resolve({
-    smt_strength_threshold: 0.7,
-    killzone_priorities: [1, 2, 3],
-    refresh_interval: 30000,
-    max_signals_display: 50,
-    enable_notifications: true,
-    chart_timeframes: ['1m', '5m', '15m', '1h']
-  });
-}
-
-export async function updateSettings(payload: Partial<Settings>): Promise<Settings> {
-  // Временная заглушка до реализации в бэкенде
-  console.log('Settings update requested:', payload);
-  return fetchSettings();
-}
-
-// ===========================================
-// Batch Operations
-// ===========================================
-
+// Batch запрос для получения всех данных разом
 export async function fetchAllData(): Promise<{
   marketData: MarketData[];
   smtAnalysis: SMTAnalysisResponse;
@@ -257,7 +193,6 @@ export async function fetchAllData(): Promise<{
   trueOpens: TrueOpensResponse;
   health: HealthStatus;
   analysisStats: AnalysisStatsResponse;
-  settings: Settings;
 }> {
   try {
     const [
@@ -266,16 +201,14 @@ export async function fetchAllData(): Promise<{
       killzones, 
       trueOpens,
       health,
-      analysisStats,
-      settings
+      analysisStats
     ] = await Promise.allSettled([
       fetchMarketData('QQQ,SPY'),
-      fetchSMTSignals(50),
+      fetchSMTSignals(),
       fetchKillzones(),
       fetchTrueOpens(),
       fetchHealth(),
-      fetchAnalysisStats(),
-      fetchSettings()
+      fetchAnalysisStats()
     ]);
 
     return {
@@ -304,14 +237,6 @@ export async function fetchAllData(): Promise<{
         signal_distribution: {},
         avg_strength: 0,
         last_analysis: new Date().toISOString()
-      },
-      settings: settings.status === 'fulfilled' ? settings.value : {
-        smt_strength_threshold: 0.7,
-        killzone_priorities: [1, 2, 3],
-        refresh_interval: 30000,
-        max_signals_display: 50,
-        enable_notifications: true,
-        chart_timeframes: ['1m', '5m', '15m', '1h']
       }
     };
   } catch (error) {
@@ -320,44 +245,22 @@ export async function fetchAllData(): Promise<{
   }
 }
 
-// ===========================================
-// Utility Functions
-// ===========================================
+// Хелпер для получения только сигналов (для обратной совместимости)
+export async function fetchSMTSignalsLegacy(limit = 50): Promise<SMTSignal[]> {
+  const response = await fetchSMTSignals(limit);
+  return response.signals;
+}
 
-export function createApiUrl(endpoint: string, params?: Record<string, string | number>): string {
-  const url = new URL(endpoint, BASE_URL);
-  
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.append(key, String(value));
-    });
+// Хелпер для получения текущей активной killzone
+export async function fetchCurrentKillzone(): Promise<KillzoneInfo | null> {
+  try {
+    const response = await fetchKillzones();
+    return response.killzones.find(kz => kz.is_active) || response.killzones[0] || null;
+  } catch (error) {
+    console.warn('Error fetching current killzone:', error);
+    return null;
   }
-  
-  return url.toString();
 }
 
-// WebSocket URL helper
-export function getWebSocketUrl(): string {
-  const wsProtocol = BASE_URL.startsWith('https') ? 'wss' : 'ws';
-  const wsUrl = BASE_URL.replace(/^https?/, wsProtocol);
-  return `${wsUrl}/ws`;
-}
-
-// Экспорт класса ошибки
+// Экспорт класса ошибки для использования в компонентах
 export { ApiError };
-
-// ===========================================
-// Type Guards (для проверки типов во время выполнения)
-// ===========================================
-
-export function isMarketData(obj: any): obj is MarketData {
-  return obj && typeof obj.symbol === 'string' && typeof obj.current_price === 'number';
-}
-
-export function isSMTSignal(obj: any): obj is SMTSignal {
-  return obj && typeof obj.id === 'string' && typeof obj.signal_type === 'string';
-}
-
-export function isHealthStatus(obj: any): obj is HealthStatus {
-  return obj && typeof obj.status === 'string' && typeof obj.redis === 'string';
-}
