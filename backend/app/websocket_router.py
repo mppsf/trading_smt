@@ -3,7 +3,7 @@ import logging
 
 from app.core.websocket_manager import WebSocketManager
 from app.services.market_data_collector import MarketDataCollector
-from backend.app.services.smart_money_service import SmartMoneyAnalyzer
+from app.services.smart_money_service import SmartMoneyService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -13,11 +13,11 @@ async def ws_endpoint(websocket: WebSocket):
     """WebSocket для реального времени обновлений"""
     websocket_manager = WebSocketManager()
     market_collector = MarketDataCollector()
-    smt_analyzer = SmartMoneyAnalyzer()
+    smt_service = SmartMoneyService()
     
     await websocket_manager.connect(websocket)
     try:
-        await websocket_manager.stream_initial(websocket, market_collector, smt_analyzer)
+        await websocket_manager.stream_initial(websocket, market_collector, smt_service)
         
         while True:
             try:

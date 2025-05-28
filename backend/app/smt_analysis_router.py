@@ -3,12 +3,12 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import logging
 
-from backend.app.schemas.schemas import (
+from app.schemas.schemas import (
     SMTAnalysisResponse, SMTSignalResponse, AnalysisStatsResponse,
     TrueOpensResponse, TrueOpenResponse, FractalsResponse, FractalPoint
 )
 from app.services.market_data_collector import MarketDataCollector
-from backend.app.services.smart_money_service import SmartMoneyAnalyzer
+from app.services.smart_money_service import SmartMoneyAnalyzer
 from app.utils import get_current_market_phase
 
 logger = logging.getLogger(__name__)
