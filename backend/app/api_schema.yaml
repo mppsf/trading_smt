@@ -26,9 +26,6 @@ tags:
     description: Real-time data streaming and notifications
 
 paths:
-  # ===========================================
-  # HEALTH ENDPOINTS
-  # ===========================================
   /health:
     get:
       tags: [health]
@@ -37,63 +34,29 @@ paths:
       operationId: getHealthStatus
       responses:
         '200':
-          description: System health status retrieved successfully
+          description: Health status retrieved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
-              examples:
-                healthy:
-                  summary: Healthy system
-                  value:
-                    status: "healthy"
-                    redis: "connected"
-                    timestamp: "2025-05-29T10:30:00.000Z"
-                unhealthy:
-                  summary: System issues
-                  value:
-                    status: "unhealthy"
-                    redis: "disconnected"
-                    timestamp: "2025-05-29T10:30:00.000Z"
 
-  # ===========================================
-  # SETTINGS ENDPOINTS
-  # ===========================================
   /api/v1/settings:
     get:
       tags: [settings]
       summary: Get current system settings
-      description: Retrieve all current system configuration parameters
       operationId: getCurrentSettings
       responses:
         '200':
-          description: Current settings retrieved successfully
+          description: Settings retrieved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SettingsResponse'
-              example:
-                smt_strength_threshold: 0.7
-                killzone_priorities: [1, 2, 3]
-                refresh_interval: 30000
-                max_signals_display: 10
-                divergence_threshold: 0.5
-                confirmation_candles: 3
-                volume_multiplier: 1.5
-                london_open: "08:00"
-                ny_open: "13:30"
-                asia_open: "00:00"
         '500':
           description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
     put:
       tags: [settings]
       summary: Update system settings
-      description: Update system configuration with validation. Only provided fields will be updated.
       operationId: updateSettings
       requestBody:
         required: true
@@ -101,40 +64,19 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SettingsUpdateRequest'
-            examples:
-              partial_update:
-                summary: Update specific settings
-                value:
-                  smt_strength_threshold: 0.8
-                  refresh_interval: 25000
-                  max_signals_display: 15
-              killzone_update:
-                summary: Update killzone settings
-                value:
-                  killzone_priorities: [2, 1, 3]
-                  london_open: "09:00"
-                  ny_open: "14:30"
-              analysis_update:
-                summary: Update analysis parameters
-                value:
-                  divergence_threshold: 0.75
-                  confirmation_candles: 5
-                  volume_multiplier: 2.0
       responses:
         '200':
-          description: Settings updated successfully
+          description: Settings updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SettingsResponse'
         '400':
-          description: Invalid settings data
+          description: Invalid settings
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                detail: "No valid settings provided"
         '422':
           description: Validation error
           content:
@@ -142,172 +84,68 @@ paths:
               schema:
                 $ref: '#/components/schemas/ValidationErrorResponse'
 
-  # ===========================================
-  # MARKET DATA ENDPOINTS
-  # ===========================================
   /api/v1/market-data:
     get:
       tags: [market-data]
       summary: Get market data for symbols
-      description: Retrieve OHLCV data for specified trading symbols with customizable timeframe
       operationId: getMarketData
       parameters:
         - name: symbols
           in: query
-          description: Comma-separated list of trading symbols
-          required: false
           schema:
             type: string
             default: "ES=F,NQ=F"
-          examples:
-            default:
-              summary: Default futures
-              value: "ES=F,NQ=F"
-            extended:
-              summary: Extended futures list
-              value: "ES=F,NQ=F,YM=F,RTY=F"
-            forex:
-              summary: Forex pairs
-              value: "EURUSD=X,GBPUSD=X,USDJPY=X"
         - name: timeframe
           in: query
-          description: Data aggregation timeframe
-          required: false
           schema:
             type: string
             enum: [5m, 15m, 1h, 1d]
             default: "5m"
-          examples:
-            scalping:
-              summary: Short-term scalping
-              value: "5m"
-            swing:
-              summary: Swing trading
-              value: "1h"
-            daily:
-              summary: Daily analysis
-              value: "1d"
         - name: limit
           in: query
-          description: Maximum number of OHLCV bars to return
-          required: false
           schema:
             type: integer
             minimum: 1
             maximum: 1000
             default: 100
-          examples:
-            quick:
-              summary: Quick view
-              value: 50
-            detailed:
-              summary: Detailed analysis
-              value: 200
       responses:
         '200':
-          description: Market data retrieved successfully
+          description: Market data retrieved
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/MarketDataResponse'
-              examples:
-                single_symbol:
-                  summary: Single symbol response
-                  value:
-                    - symbol: "ES=F"
-                      current_price: 4185.25
-                      change_percent: 0.15
-                      volume: 1250000
-                      timestamp: "2025-05-29T10:30:00.000Z"
-                      market_state: "open"
-                      ohlcv:
-                        - timestamp: "2025-05-29T10:25:00.000Z"
-                          Open: 4184.75
-                          High: 4186.00
-                          Low: 4183.50
-                          Close: 4185.25
-                          Volume: 25000
-                multiple_symbols:
-                  summary: Multiple symbols response
-                  value:
-                    - symbol: "ES=F"
-                      current_price: 4185.25
-                      change_percent: 0.15
-                      volume: 1250000
-                      timestamp: "2025-05-29T10:30:00.000Z"
-                      market_state: "open"
-                      ohlcv: []
-                    - symbol: "NQ=F"
-                      current_price: 14250.75
-                      change_percent: -0.08
-                      volume: 890000
-                      timestamp: "2025-05-29T10:30:00.000Z"
-                      market_state: "open"
-                      ohlcv: []
         '500':
           description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                detail: "Error fetching market data from provider"
 
-  # ===========================================
-  # SMT ANALYSIS ENDPOINTS
-  # ===========================================
   /api/v1/smt-analysis:
     get:
       tags: [smt-analysis]
       summary: Get Smart Money Technical analysis
-      description: Retrieve SMT analysis signals with filtering and pagination options
       operationId: getSMTAnalysis
       parameters:
         - name: signal_types
           in: query
-          description: Filter by specific signal types
-          required: false
           schema:
             type: array
             items:
               $ref: '#/components/schemas/SMTSignalType'
           style: form
           explode: false
-          examples:
-            divergence_only:
-              summary: Divergence signals only
-              value: ["smt_bullish_divergence", "smt_bearish_divergence"]
-            breaks_only:
-              summary: False breaks only
-              value: ["false_break_up", "false_break_down"]
         - name: min_strength
           in: query
-          description: Minimum signal strength threshold (0.0 to 1.0)
-          required: false
           schema:
             type: number
             minimum: 0.0
             maximum: 1.0
-          examples:
-            high_confidence:
-              summary: High confidence signals
-              value: 0.8
-            medium_confidence:
-              summary: Medium confidence signals
-              value: 0.5
         - name: confirmed_only
           in: query
-          description: Return only confirmed signals
-          required: false
           schema:
             type: boolean
-            default: false
         - name: limit
           in: query
-          description: Maximum number of signals to return
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -315,113 +153,51 @@ paths:
             default: 50
       responses:
         '200':
-          description: SMT analysis results retrieved successfully
+          description: Analysis results retrieved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SMTAnalysisResponse'
-              examples:
-                with_signals:
-                  summary: Analysis with signals
-                  value:
-                    signals:
-                      - timestamp: "2025-05-29T10:15:00.000Z"
-                        signal_type: "smt_bullish_divergence"
-                        strength: 0.85
-                        nasdaq_price: 14250.75
-                        sp500_price: 4185.25
-                        divergence_percentage: 1.25
-                        confirmation_status: true
-                        details:
-                          correlation: -0.15
-                          volume_ratio: 1.8
-                          duration_minutes: 15
-                    total_count: 1
-                    analysis_timestamp: "2025-05-29T10:30:00.000Z"
-                    market_phase: "trending"
-                no_signals:
-                  summary: No signals found
-                  value:
-                    signals: []
-                    total_count: 0
-                    analysis_timestamp: "2025-05-29T10:30:00.000Z"
-                    market_phase: "consolidation"
-        '500':
-          description: Analysis failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/smt-analysis/stats:
     get:
       tags: [smt-analysis]
       summary: Get analysis statistics
-      description: Retrieve aggregated statistics about SMT analysis performance
       operationId: getSMTStats
       responses:
         '200':
-          description: Analysis statistics retrieved successfully
+          description: Statistics retrieved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AnalysisStatsResponse'
-              example:
-                total_signals: 156
-                confirmed_signals: 89
-                signal_distribution:
-                  smt_bullish_divergence: 45
-                  smt_bearish_divergence: 38
-                  false_break_up: 23
-                  false_break_down: 28
-                  volume_spike: 22
-                avg_strength: 0.72
-                last_analysis: "2025-05-29T10:30:00.000Z"
 
   /api/v1/true-opens:
     get:
       tags: [smt-analysis]
       summary: Get True Opens levels
-      description: Retrieve True Open price levels for daily, weekly, and quarterly timeframes
       operationId: getTrueOpens
       responses:
         '200':
-          description: True Opens levels retrieved successfully
+          description: True Opens levels retrieved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TrueOpensResponse'
-              example:
-                es_opens:
-                  daily: 4180.50
-                  weekly: 4175.25
-                  quarterly: 4165.00
-                  timestamp: "2025-05-29T10:30:00.000Z"
-                nq_opens:
-                  daily: 14200.75
-                  weekly: 14150.25
-                  quarterly: 14100.50
-                  timestamp: "2025-05-29T10:30:00.000Z"
 
   /api/v1/fractals:
     get:
       tags: [smt-analysis]
       summary: Get fractal points
-      description: Retrieve high and low fractal points for specified symbol
       operationId: getFractals
       parameters:
         - name: symbol
           in: query
-          description: Trading symbol for fractal analysis
-          required: false
           schema:
             type: string
             default: "ES=F"
-          example: "NQ=F"
         - name: limit
           in: query
-          description: Maximum number of fractals to return
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -429,61 +205,32 @@ paths:
             default: 20
       responses:
         '200':
-          description: Fractal points retrieved successfully
+          description: Fractal points retrieved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FractalsResponse'
-              example:
-                symbol: "ES=F"
-                high_fractals:
-                  - timestamp: "2025-05-29T09:15:00.000Z"
-                    price: 4190.25
-                    type: "high"
-                    index: 45
-                  - timestamp: "2025-05-29T08:30:00.000Z"
-                    price: 4187.75
-                    type: "high"
-                    index: 32
-                low_fractals:
-                  - timestamp: "2025-05-29T09:45:00.000Z"
-                    price: 4182.50
-                    type: "low"
-                    index: 52
-                  - timestamp: "2025-05-29T08:15:00.000Z"
-                    price: 4179.25
-                    type: "low"
-                    index: 28
-                timestamp: "2025-05-29T10:30:00.000Z"
 
   /api/v1/volume-anomalies:
     get:
       tags: [smt-analysis]
       summary: Get volume anomalies
-      description: Detect and retrieve volume anomalies based on statistical analysis
       operationId: getVolumeAnomalies
       parameters:
         - name: symbol
           in: query
-          description: Trading symbol for volume analysis
-          required: false
           schema:
             type: string
             default: "ES=F"
         - name: threshold
           in: query
-          description: Volume anomaly threshold multiplier
-          required: false
           schema:
             type: number
             minimum: 1.0
             maximum: 5.0
             default: 2.0
-          example: 2.5
         - name: limit
           in: query
-          description: Maximum number of anomalies to return
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -491,157 +238,41 @@ paths:
             default: 10
       responses:
         '200':
-          description: Volume anomalies retrieved successfully
+          description: Volume anomalies retrieved
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/VolumeAnomalyResponse'
-              example:
-                - timestamp: "2025-05-29T10:15:00.000Z"
-                  volume: 50000
-                  avg_volume: 18500
-                  volume_ratio: 2.7
-                  anomaly_type: "spike"
-                  significance: 0.95
-                - timestamp: "2025-05-29T09:30:00.000Z"
-                  volume: 75000
-                  avg_volume: 20000
-                  volume_ratio: 3.75
-                  anomaly_type: "unusual_high"
-                  significance: 0.99
 
-  # ===========================================
-  # KILLZONES ENDPOINTS
-  # ===========================================
   /api/v1/killzones:
     get:
       tags: [killzones]
-      summary: Get trading sessions (Killzones)
-      description: Retrieve current and upcoming trading sessions with activity status
+      summary: Get trading sessions
       operationId: getKillzones
       responses:
         '200':
-          description: Trading sessions retrieved successfully
+          description: Sessions retrieved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/KillzonesResponse'
-              examples:
-                active_sessions:
-                  summary: Sessions with active status
-                  value:
-                    killzones:
-                      - name: "London Open"
-                        start_time: "08:00"
-                        end_time: "10:00"
-                        description: "European session opening with high volatility"
-                        is_active: true
-                        timezone: "UTC"
-                      - name: "New York Open"
-                        start_time: "13:30"
-                        end_time: "16:00"
-                        description: "US session opening with maximum volume"
-                        is_active: false
-                        timezone: "UTC"
-                      - name: "Asian Kill Zone"
-                        start_time: "00:00"
-                        end_time: "03:00"
-                        description: "Asian session with focus on Yen pairs"
-                        is_active: false
-                        timezone: "UTC"
-                basic_sessions:
-                  summary: Basic session info
-                  value:
-                    killzones:
-                      - name: "London Session"
-                        start_time: "08:00"
-                        end_time: "17:00"
-                        timezone: "UTC"
-                      - name: "New York Session"
-                        start_time: "13:00"
-                        end_time: "22:00"
-                        timezone: "UTC"
-        '500':
-          description: Unable to retrieve killzones
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                detail: "Killzone service unavailable"
 
-  # ===========================================
-  # WEBSOCKET ENDPOINTS
-  # ===========================================
   /ws:
     get:
       tags: [websocket]
-      summary: WebSocket connection for real-time data
-      description: |
-        Establish WebSocket connection for real-time market data and SMT analysis updates.
-        
-        **Message Types:**
-        - `market_data_update`: Real-time price updates
-        - `smt_signal`: New SMT analysis signals
-        - `killzone_change`: Trading session status changes
-        - `system_status`: System health updates
-        
-        **Connection Flow:**
-        1. Connect to `/ws` endpoint
-        2. Send subscription messages for desired data types
-        3. Receive real-time updates as JSON messages
-        
-        **Example Messages:**
-        ```json
-        // Subscribe to market data
-        {"type": "subscribe", "channel": "market_data", "symbols": ["ES=F", "NQ=F"]}
-        
-        // Subscribe to SMT signals
-        {"type": "subscribe", "channel": "smt_signals", "min_strength": 0.7}
-        
-        // Market data update (received)
-        {
-          "type": "market_data_update",
-          "symbol": "ES=F",
-          "price": 4185.25,
-          "change": 0.15,
-          "timestamp": "2025-05-29T10:30:00.000Z"
-        }
-        
-        // SMT signal (received)
-        {
-          "type": "smt_signal",
-          "signal_type": "smt_bullish_divergence",
-          "strength": 0.85,
-          "timestamp": "2025-05-29T10:30:00.000Z"
-        }
-        ```
+      summary: WebSocket connection
       operationId: connectWebSocket
+      description: |
+        Establish WebSocket connection for real-time updates.
       responses:
-        '101':
-          description: WebSocket connection established successfully
-        '400':
-          description: WebSocket upgrade failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                detail: "Invalid WebSocket upgrade request"
-        '500':
-          description: WebSocket connection error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+        '101': description: Connection established
+        '400': description: Upgrade failed
+        '500': description: Connection error
 
 components:
   schemas:
-    # ===========================================
-    # HEALTH SCHEMAS
-    # ===========================================
     HealthResponse:
       type: object
       required: [status, redis, timestamp]
@@ -649,349 +280,158 @@ components:
         status:
           type: string
           enum: [healthy, unhealthy, unknown]
-          description: Overall system health status
         redis:
           type: string
           enum: [connected, disconnected, unknown]
-          description: Redis connection status
         timestamp:
           type: string
           format: date-time
-          description: Health check timestamp
 
-    # ===========================================
-    # SETTINGS SCHEMAS
-    # ===========================================
     SettingsResponse:
       type: object
       required: [smt_strength_threshold, killzone_priorities, refresh_interval, max_signals_display]
       properties:
-        smt_strength_threshold:
-          type: number
-          minimum: 0.0
-          maximum: 1.0
-          description: Minimum signal strength threshold for SMT analysis
-        killzone_priorities:
-          type: array
-          items:
-            type: integer
-            minimum: 1
-            maximum: 5
-          description: Priority levels for different trading sessions
-        refresh_interval:
-          type: integer
-          minimum: 1000
-          description: Data refresh interval in milliseconds
-        max_signals_display:
-          type: integer
-          minimum: 1
-          maximum: 100
-          description: Maximum number of signals to display
-        divergence_threshold:
-          type: number
-          minimum: 0.1
-          maximum: 2.0
-          default: 0.5
-          description: Threshold for detecting SMT divergences
-        confirmation_candles:
-          type: integer
-          minimum: 1
-          maximum: 10
-          default: 3
-          description: Number of candles required for signal confirmation
-        volume_multiplier:
-          type: number
-          minimum: 1.0
-          maximum: 5.0
-          default: 1.5
-          description: Volume spike detection multiplier
-        london_open:
-          type: string
-          pattern: '^[0-2][0-9]:[0-5][0-9]$'
-          default: "08:00"
-          description: London session open time (HH:MM)
-        ny_open:
-          type: string
-          pattern: '^[0-2][0-9]:[0-5][0-9]$'
-          default: "13:30"
-          description: New York session open time (HH:MM)
-        asia_open:
-          type: string
-          pattern: '^[0-2][0-9]:[0-5][0-9]$'
-          default: "00:00"
-          description: Asian session open time (HH:MM)
-
+        smt_strength_threshold: { type: number, minimum: 0.0, maximum: 1.0 }
+        killzone_priorities: { type: array, items: { type: integer } }
+        refresh_interval: { type: integer, minimum: 1000 }
+        max_signals_display: { type: integer, minimum: 1 }
+        divergence_threshold: { type: number, minimum: 0.1, maximum: 2.0 }
+        confirmation_candles: { type: integer, minimum: 1, maximum: 10 }
+        volume_multiplier: { type: number, minimum: 1.0, maximum: 5.0 }
+        london_open: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        ny_open: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        asia_open: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
     SettingsUpdateRequest:
       type: object
       properties:
-        smt_strength_threshold:
-          type: number
-          minimum: 0.0
-          maximum: 1.0
-        killzone_priorities:
-          type: array
-          items:
-            type: integer
-            minimum: 1
-            maximum: 5
-        refresh_interval:
-          type: integer
-          minimum: 1000
-        max_signals_display:
-          type: integer
-          minimum: 1
-          maximum: 100
-        divergence_threshold:
-          type: number
-          minimum: 0.1
-          maximum: 2.0
-        confirmation_candles:
-          type: integer
-          minimum: 1
-          maximum: 10
-        volume_multiplier:
-          type: number
-          minimum: 1.0
-          maximum: 5.0
-        london_open:
-          type: string
-          pattern: '^[0-2][0-9]:[0-5][0-9]$'
-        ny_open:
-          type: string
-          pattern: '^[0-2][0-9]:[0-5][0-9]$'
-        asia_open:
-          type: string
-          pattern: '^[0-2][0-9]:[0-5][0-9]$'
-
-    # ===========================================
-    # MARKET DATA SCHEMAS
-    # ===========================================
+        smt_strength_threshold: { type: number, minimum: 0.0, maximum: 1.0 }
+        killzone_priorities: { type: array, items: { type: integer } }
+        refresh_interval: { type: integer, minimum: 1000 }
+        max_signals_display: { type: integer, minimum: 1 }
+        divergence_threshold: { type: number, minimum: 0.1, maximum: 2.0 }
+        confirmation_candles: { type: integer, minimum: 1, maximum: 10 }
+        volume_multiplier: { type: number, minimum: 1.0, maximum: 5.0 }
+        london_open: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        ny_open: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        asia_open: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
     MarketDataResponse:
       type: object
       required: [symbol, current_price, timestamp, ohlcv]
       properties:
-        symbol:
-          type: string
-          description: Trading symbol identifier
-          example: "ES=F"
-        current_price:
-          type: number
-          description: Current market price
-          example: 4185.25
-        change_percent:
-          type: number
-          description: Price change percentage from previous close
-          example: 0.15
-        volume:
-          type: integer
-          description: Current trading volume
-          example: 1250000
-        timestamp:
-          type: string
-          format: date-time
-          description: Data timestamp
+        symbol: { type: string }
+        current_price: { type: number }
+        change_percent: { type: number }
+        volume: { type: integer }
+        timestamp: { type: string, format: date-time }
         ohlcv:
           type: array
-          items:
-            $ref: '#/components/schemas/OHLCVData'
-          description: Historical OHLCV data array
-        market_state:
-          type: string
-          enum: [open, closed, pre_market, after_hours, unknown]
-          description: Current market session state
-
+          items: { $ref: '#/components/schemas/OHLCVData' }
+        market_state: { type: string, enum: [open, closed, pre_market, after_hours, unknown] }
     OHLCVData:
       type: object
       required: [timestamp, Open, High, Low, Close, Volume]
       properties:
-        timestamp:
-          type: string
-          format: date-time
-          description: Bar timestamp
-        Open:
-          type: number
-          description: Opening price
-          example: 4184.75
-        High:
-          type: number
-          description: Highest price
-          example: 4186.00
-        Low:
-          type: number
-          description: Lowest price
-          example: 4183.50
-        Close:
-          type: number
-          description: Closing price
-          example: 4185.25
-        Volume:
-          type: integer
-          description: Trading volume
-          example: 25000
-
-    # ===========================================
-    # SMT ANALYSIS SCHEMAS
-    # ===========================================
+        timestamp: { type: string, format: date-time }
+        Open: { type: number }
+        High: { type: number }
+        Low: { type: number }
+        Close: { type: number }
+        Volume: { type: integer }
     SMTSignalType:
       type: string
-      enum:
-        - smt_bullish_divergence
-        - smt_bearish_divergence
-        - false_break_up
-        - false_break_down
-        - volume_spike
-        - volume_divergence_bullish
-        - volume_divergence_bearish
-        - judas_swing_bullish
-        - judas_swing_bearish
-      description: Smart Money Technical signal types
-
-    SMTSignalResponse:
-      type: object
-      required: [timestamp, signal_type, strength, nasdaq_price, sp500_price, divergence_percentage, confirmation_status, details]
-      properties:
-        timestamp:
-          type: string
-          format: date-time
-          description: Signal generation timestamp
-        signal_type:
-          $ref: '#/components/schemas/SMTSignalType'
-        strength:
-          type: number
-          minimum: 0.0
-          maximum: 1.0
-          description: Signal strength confidence (0.0 to 1.0)
-          example: 0.85
-        nasdaq_price:
-          type: number
-          description: NASDAQ (NQ=F) price at signal time
-          example: 14250.75
-        sp500_price:
-          type: number
-          description: S&P 500 (ES=F) price at signal time
-          example: 4185.25
-        divergence_percentage:
-          type: number
-          description: Percentage divergence between indices
-          example: 1.25
-        confirmation_status:
-          type: boolean
-          description: Whether signal has been confirmed by subsequent price action
-        details:
-          type: object
-          additionalProperties: true
-          description: Additional signal-specific details and metadata
-          example:
-            correlation: -0.15
-            volume_ratio: 1.8
-            duration_minutes: 15
-
+      enum: [smt_bullish_divergence, smt_bearish_divergence, false_break_up, false_break_down, volume_spike, volume_divergence_bullish, volume_divergence_bearish, judas_swing_bullish, judas_swing_bearish]
     SMTAnalysisResponse:
       type: object
       required: [signals, total_count, analysis_timestamp]
       properties:
         signals:
           type: array
-          items:
-            $ref: '#/components/schemas/SMTSignalResponse'
-          description: Array of SMT signals
-        total_count:
-          type: integer
-          description: Total number of signals found
-          example: 5
-        analysis_timestamp:
-          type: string
-          format: date-time
-          description: When the analysis was performed
-        market_phase:
-          type: string
-          description: Current market phase assessment
-          enum: [trending, consolidation, reversal, breakout, unknown]
-          example: "trending"
-
+          items: { $ref: '#/components/schemas/SMTSignalResponse' }
+        total_count: { type: integer }
+        analysis_timestamp: { type: string, format: date-time }
+        market_phase: { type: string, enum: [trending, consolidation, reversal, breakout, unknown] }
+    SMTSignalResponse:
+      type: object
+      required: [timestamp, signal_type, strength, nasdaq_price, sp500_price, divergence_percentage, confirmation_status, details]
+      properties:
+        timestamp: { type: string, format: date-time }
+        signal_type: { $ref: '#/components/schemas/SMTSignalType' }
+        strength: { type: number, minimum: 0.0, maximum: 1.0 }
+        nasdaq_price: { type: number }
+        sp500_price: { type: number }
+        divergence_percentage: { type: number }
+        confirmation_status: { type: boolean }
+        details: { type: object, additionalProperties: true }
     AnalysisStatsResponse:
       type: object
       required: [total_signals, confirmed_signals, signal_distribution, avg_strength, last_analysis]
       properties:
-        total_signals:
-          type: integer
-          description: Total number of signals generated
-          example: 156
-        confirmed_signals:
-          type: integer
-          description: Number of confirmed signals
-          example: 89
-        signal_distribution:
-          type: object
-          additionalProperties:
-            type: integer
-          description: Distribution of signals by type
-          example:
-            smt_bullish_divergence: 45
-            smt_bearish_divergence: 38
-            false_break_up: 23
-        avg_strength:
-          type: number
-          minimum: 0.0
-          maximum: 1.0
-          description: Average signal strength
-          example: 0.72
-        last_analysis:
-          type: string
-          format: date-time
-          description: Timestamp of last analysis run
-
-    TrueOpenResponse:
-      type: object
-      properties:
-        daily:
-          type: number
-          nullable: true
-          description: Daily True Open level
-          example: 4180.50
-        weekly:
-          type: number
-          nullable: true
-          description: Weekly True Open level
-          example: 4175.25
-        quarterly:
-          type: number
-          nullable: true
-          description: Quarterly True Open level
-          example: 4165.00
-        timestamp:
-          type: string
-          format: date-time
-          description: True Open calculation timestamp
-
+        total_signals: { type: integer }
+        confirmed_signals: { type: integer }
+        signal_distribution: { type: object, additionalProperties: { type: integer } }
+        avg_strength: { type: number, minimum: 0.0, maximum: 1.0 }
+        last_analysis: { type: string, format: date-time }
     TrueOpensResponse:
       type: object
       required: [es_opens, nq_opens]
       properties:
-        es_opens:
-          $ref: '#/components/schemas/TrueOpenResponse'
-          description: S&P 500 (ES=F) True Open levels
-        nq_opens:
-          $ref: '#/components/schemas/TrueOpenResponse'
-          description: NASDAQ (NQ=F) True Open levels
-
+        es_opens: { $ref: '#/components/schemas/TrueOpenResponse' }
+        nq_opens: { $ref: '#/components/schemas/TrueOpenResponse' }
+    TrueOpenResponse:
+      type: object
+      properties:
+        daily: { type: number, nullable: true }
+        weekly: { type: number, nullable: true }
+        quarterly: { type: number, nullable: true }
+        timestamp: { type: string, format: date-time }
+    FractalsResponse:
+      type: object
+      properties:
+        symbol: { type: string }
+        high_fractals:
+          type: array
+          items: { $ref: '#/components/schemas/FractalPoint' }
+        low_fractals:
+          type: array
+          items: { $ref: '#/components/schemas/FractalPoint' }
+        timestamp: { type: string, format: date-time }
     FractalPoint:
       type: object
       required: [timestamp, price, type, index]
       properties:
-        timestamp:
-          type: string
-          format: date-time
-          description: Fractal point timestamp
-        price:
-          type: number
-          description: Fractal price level
-          example: 4190.25
-        type:
-          type: string
-          enum: [high, low]
-          description: Fractal type
-        index:
-          type: integer
-          description: Data point index
-          example:
+        timestamp: { type: string, format: date-time }
+        price: { type: number }
+        type: { type: string, enum: [high, low] }
+        index: { type: integer }
+    VolumeAnomalyResponse:
+      type: object
+      properties:
+        timestamp: { type: string, format: date-time }
+        volume: { type: integer }
+        avg_volume: { type: integer }
+        volume_ratio: { type: number }
+        anomaly_type: { type: string }
+        significance: { type: number }
+    KillzonesResponse:
+      type: object
+      properties:
+        killzones:
+          type: array
+          items: { $ref: '#/components/schemas/Killzone' }
+    Killzone:
+      type: object
+      properties:
+        name: { type: string }
+        start_time: { type: string }
+        end_time: { type: string }
+        description: { type: string }
+        is_active: { type: boolean }
+        timezone: { type: string }
+    ErrorResponse:
+      type: object
+      properties:
+        detail: { type: string }
+    ValidationErrorResponse:
+      type: object
+      properties:
+        detail: { type: string }
