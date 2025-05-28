@@ -271,3 +271,5 @@ async def get_fractals(
     except Exception as e:
         logger.error(f"Error getting fractals: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+

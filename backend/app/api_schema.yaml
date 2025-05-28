@@ -258,6 +258,124 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/KillzonesResponse'
+  /api/v1/smt-signals:
+    get:
+      tags: [smt-analysis]
+      summary: Get SMT signals with custom parameters
+      operationId: getSMTSignals
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: signal_type
+          in: query
+          schema:
+            type: string
+        - name: min_strength
+          in: query
+          schema:
+            type: number
+            minimum: 0.0
+            maximum: 1.0
+        - name: confirmed_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: smt_strength_threshold
+          in: query
+          schema:
+            type: number
+            minimum: 0.0
+            maximum: 1.0
+        - name: divergence_threshold
+          in: query
+          schema:
+            type: number
+            minimum: 0.0
+            maximum: 5.0
+        - name: confirmation_candles
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+        - name: volume_multiplier
+          in: query
+          schema:
+            type: number
+            minimum: 1.0
+            maximum: 5.0
+        - name: max_signals_display
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: refresh_interval
+          in: query
+          schema:
+            type: integer
+            minimum: 5000
+            maximum: 300000
+        - name: london_open
+          in: query
+          schema:
+            type: string
+            pattern: '^[0-2][0-9]:[0-5][0-9]$'
+        - name: ny_open
+          in: query
+          schema:
+            type: string
+            pattern: '^[0-2][0-9]:[0-5][0-9]$'
+        - name: asia_open
+          in: query
+          schema:
+            type: string
+            pattern: '^[0-2][0-9]:[0-5][0-9]$'
+        - name: killzone_priorities
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SMT signals retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SMTAnalysisResponse'
+        '400':
+          description: Invalid parameters
+        '500':
+          description: Internal server error
+
+  /ws/market-updates:
+    get:
+      tags: [websocket]
+      summary: Real-time market updates WebSocket
+      operationId: connectMarketUpdatesWS
+      description: |
+        WebSocket connection for real-time market data and SMT analysis updates.
+      responses:
+        '101': description: Connection established
+        '400': description: Upgrade failed
+        '500': description: Connection error
+
+  /ws:
+    get:
+      tags: [websocket]
+      summary: WebSocket connection
+      operationId: connectWebSocket
+      description: |
+        Establish WebSocket connection for real-time updates.
+      responses:
+        '101': description: Connection established
+        '400': description: Upgrade failed
+        '500': description: Connection error
 
   /ws:
     get:
