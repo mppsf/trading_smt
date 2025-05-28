@@ -60,85 +60,96 @@ async def get_smt_signals(
     min_strength: Optional[float] = Query(None, ge=0.0, le=1.0, description="Минимальная сила сигнала"),
     confirmed_only: bool = Query(False, description="Только подтвержденные сигналы"),
     min_killzone_priority: Optional[int] = Query(None, ge=1, le=5, description="Минимальный приоритет киллзоны"),
-    time_window_minutes: Optional[int] = Query(None, ge=0, description="Временное окно в минутах (0 = без ограничений)"),
-    # Settings parameters
-    smt_strength_threshold: Optional[float] = Query(None, ge=0.0, le=1.0, description="Порог силы SMT сигналов"),
-    divergence_threshold: Optional[float] = Query(None, ge=0.0, le=5.0, description="Порог дивергенции %"),
-    confirmation_candles: Optional[int] = Query(None, ge=1, le=10, description="Количество свечей для подтверждения"),
-    volume_multiplier: Optional[float] = Query(None, ge=1.0, le=5.0, description="Множитель объема"),
-    max_signals_display: Optional[int] = Query(None, ge=1, le=100, description="Максимум сигналов для отображения"),
-    refresh_interval: Optional[int] = Query(None, ge=5000, le=300000, description="Интервал обновления мс"),
-    london_open: Optional[str] = Query(None, description="Время открытия Лондона HH:MM"),
-    ny_open: Optional[str] = Query(None, description="Время открытия Нью-Йорка HH:MM"),
-    asia_open: Optional[str] = Query(None, description="Время открытия Азии HH:MM"),
-    killzone_priorities: Optional[str] = Query(None, description="Приоритеты киллзон через запятую")
+    time_window_minutes: Optional[int] = Query(None, ge=0, description="Временное окно в минутах (0 = без ограничений)")
 ):
     try:
-        # Подготовка параметров для анализа
-        analysis_params = {}
-        
-        # Собираем только переданные параметры
-        if smt_strength_threshold is not None:
-            analysis_params['smt_strength_threshold'] = smt_strength_threshold
-        if divergence_threshold is not None:
-            analysis_params['divergence_threshold'] = divergence_threshold
-        if confirmation_candles is not None:
-            analysis_params['confirmation_candles'] = confirmation_candles
-        if volume_multiplier is not None:
-            analysis_params['volume_multiplier'] = volume_multiplier
-        if max_signals_display is not None:
-            analysis_params['max_signals_display'] = max_signals_display
-        if refresh_interval is not None:
-            analysis_params['refresh_interval'] = refresh_interval
-        if london_open is not None:
-            analysis_params['london_open'] = london_open
-        if ny_open is not None:
-            analysis_params['ny_open'] = ny_open
-        if asia_open is not None:
-            analysis_params['asia_open'] = asia_open
-        if killzone_priorities is not None:
-            try:
-                priorities = [int(p.strip()) for p in killzone_priorities.split(',')]
-                analysis_params['killzone_priorities'] = priorities
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid killzone_priorities format")
-
-        # Получаем свежие рыночные данные
+        # DEBUG: Получаем данные и проверяем их наличие
         market_collector = MarketDataCollector()
+        
+        # Проверяем health статус коллектора
+        health_status = await market_collector.health_check()
+        logger.info(f"Market collector health: {health_status}")
+        
+        # Пробуем получить cached данные
+        cached_data = await market_collector.get_cached_data()
+        logger.info(f"Cached data available: {cached_data is not None}")
+        if cached_data:
+            logger.info(f"Cached symbols: {list(cached_data.keys())}")
+        
+        # Получаем данные по символам
         es_data = await market_collector.get_symbol_data('ES=F')
         nq_data = await market_collector.get_symbol_data('NQ=F')
         
+        logger.info(f"ES data available: {es_data is not None}")
+        logger.info(f"NQ data available: {nq_data is not None}")
+        
+        if es_data:
+            logger.info(f"ES current price: {es_data.current_price}, timestamp: {es_data.timestamp}")
+            logger.info(f"ES OHLCV 15m length: {len(es_data.ohlcv_15m) if es_data.ohlcv_15m else 0}")
+        
+        if nq_data:
+            logger.info(f"NQ current price: {nq_data.current_price}, timestamp: {nq_data.timestamp}")
+            logger.info(f"NQ OHLCV 15m length: {len(nq_data.ohlcv_15m) if nq_data.ohlcv_15m else 0}")
+        
+        # Если нет cached данных, пробуем собрать свежие
         if not es_data or not nq_data:
-            raise HTTPException(status_code=404, detail="Market data not available")
+            logger.warning("No cached data, attempting fresh collection...")
+            fresh_data = await market_collector.collect_realtime_data()
+            logger.info(f"Fresh data collected for symbols: {list(fresh_data.keys())}")
+            
+            es_data = fresh_data.get('ES=F')
+            nq_data = fresh_data.get('NQ=F')
+            
+            if es_data:
+                logger.info(f"Fresh ES data: price={es_data.current_price}")
+            if nq_data:
+                logger.info(f"Fresh NQ data: price={nq_data.current_price}")
+        
+        if not es_data or not nq_data:
+            # Последняя попытка - прямое обращение к Yahoo Finance
+            logger.warning("Attempting direct Yahoo Finance fallback...")
+            try:
+                import yfinance as yf
+                es_ticker = yf.Ticker('ES=F')
+                nq_ticker = yf.Ticker('NQ=F')
+                
+                es_hist = es_ticker.history(period="1d", interval="15m")
+                nq_hist = nq_ticker.history(period="1d", interval="15m")
+                
+                logger.info(f"Direct YF - ES data length: {len(es_hist) if not es_hist.empty else 0}")
+                logger.info(f"Direct YF - NQ data length: {len(nq_hist) if not nq_hist.empty else 0}")
+                
+                if not es_hist.empty and not nq_hist.empty:
+                    logger.info("Using direct Yahoo Finance data as fallback")
+                    # Создаем минимальные mock объекты для анализа
+                    from app.services.market_data_collector import MarketSnapshot, OHLCVData, TechnicalIndicators
+                    
+                    # Простой fallback без full snapshot
+                    return SMTAnalysisResponse(
+                        signals=[],
+                        total_count=0,
+                        analysis_timestamp=datetime.now(timezone.utc).isoformat(),
+                        market_phase="fallback_mode"
+                    )
+                    
+            except Exception as yf_error:
+                logger.error(f"Yahoo Finance fallback failed: {yf_error}")
+            
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Market data not available. Health: {health_status}"
+            )
 
-        # Получаем информацию о киллзонах
+        # Если данные есть, продолжаем с анализом
         killzone_service = KillzoneService()
         killzones = await killzone_service.get_killzones()
         
-        # Создаем сервис с кастомными параметрами
         smt_service = SmartMoneyService()
+        market_data = {'ES=F': es_data, 'NQ=F': nq_data}
+        signals = await smt_service.analyze(market_data)
         
-        # Если есть кастомные параметры, выполняем свежий анализ
-        if analysis_params:
-            # Временно обновляем настройки анализаторов
-            original_smt_settings = smt_service.smt_analyzer.settings.copy()
-            original_vol_settings = smt_service.volume_analyzer.settings.copy()
-            
-            # Применяем кастомные параметры
-            smt_service.smt_analyzer.settings.update(analysis_params)
-            smt_service.volume_analyzer.settings.update(analysis_params)
-            
-            # Выполняем свежий анализ
-            market_data = {'ES=F': es_data, 'NQ=F': nq_data}
-            signals = await smt_service.analyze(market_data)
-            
-            # Восстанавливаем оригинальные настройки
-            smt_service.smt_analyzer.settings = original_smt_settings
-            smt_service.volume_analyzer.settings = original_vol_settings
-        else:
-            # Используем кешированные сигналы
-            signals = await smt_service.get_cached_signals(limit)
-
+        logger.info(f"Generated {len(signals)} signals")
+        
         # Применяем фильтры
         filtered_signals = signals
         
@@ -151,40 +162,12 @@ async def get_smt_signals(
         if confirmed_only:
             filtered_signals = [s for s in filtered_signals if getattr(s, 'confirmed', False)]
             
-        # Фильтр по временному окну
         if time_window_minutes is not None and time_window_minutes > 0:
             filtered_signals = [s for s in filtered_signals 
                               if is_signal_in_time_window(s.timestamp, time_window_minutes)]
         
-        # Фильтр по приоритету киллзоны
-        if min_killzone_priority is not None:
-            # Предполагаем, что в сигнале есть информация о киллзоне
-            # Если нет, то определяем по времени сигнала
-            current_time = datetime.now(timezone.utc).time()
-            current_killzone = None
-            
-            for kz in killzones:
-                start_time = datetime.strptime(kz.start_time, "%H:%M:%S").time()
-                end_time = datetime.strptime(kz.end_time, "%H:%M:%S").time()
-                
-                if start_time <= current_time <= end_time:
-                    current_killzone = kz.name
-                    break
-            
-            if current_killzone:
-                current_priority = get_killzone_priority(current_killzone)
-                if current_priority >= min_killzone_priority:
-                    # Фильтруем сигналы только если текущая киллзона имеет достаточный приоритет
-                    pass
-                else:
-                    # Если текущая киллзона не проходит фильтр, возвращаем пустой результат
-                    filtered_signals = []
-
-        # Ограничиваем количество результатов
-        final_limit = min(limit, analysis_params.get('max_signals_display', limit))
-        filtered_signals = filtered_signals[:final_limit]
+        filtered_signals = filtered_signals[:limit]
         
-        # Преобразуем в формат ответа
         result_signals = []
         for signal in filtered_signals:
             frontend_signal_type = signal.type
@@ -218,7 +201,7 @@ async def get_smt_signals(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting SMT signals: {e}")
+        logger.error(f"Error getting SMT signals: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/smt-stats", response_model=AnalysisStatsResponse)
