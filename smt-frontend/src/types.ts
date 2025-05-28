@@ -10,40 +10,50 @@ export interface OHLCV {
 
 export interface MarketData {
   symbol: string;
-  current_price: number;
-  change_percent: number;
-  volume: number;
+  price: number; // Изменено с current_price на price (как в бэкенде)
+  volume?: number; // Сделано опциональным как в бэкенде
   timestamp: string;
-  ohlcv_5m: OHLCV[];
-  // Добавляем поле market_state которое возвращает бэкенд
-  market_state?: string;
+  // Убираем поля которых нет в бэкенде
+  // change_percent: number;
+  // ohlcv_5m: OHLCV[];
+  // market_state?: string;
 }
 
+// Приводим в соответствие с бэкендом SMTSignalResponse
 export interface SMTSignal {
   timestamp: string;
-  signal_type: 'bullish_divergence' | 'bearish_divergence' | 'neutral';
-  strength: number;
+  signal_type: string; // Изменено на string как в бэкенде
+  strength: number; // от 0 до 1
   nasdaq_price: number;
   sp500_price: number;
   divergence_percentage: number;
   confirmation_status: boolean;
-  // Добавляем поле details которое возвращает бэкенд
-  details?: any;
+  details: Record<string, any>; // Изменено с any на Record для лучшей типизации
 }
 
+// Приводим в соответствие с бэкендом KillzoneInfo
 export interface KillzoneInfo {
-  current: string | null;
-  time_remaining: string;
-  next_session: string;
-  priority: 'high' | 'medium' | 'low';
+  name: string;
+  start_time: string;
+  end_time: string;
+  description?: string;
+  is_active?: boolean;
+  timezone?: string;
 }
 
-// Приводим в соответствие с бэкендом
+// Ответ для killzones согласно бэкенду
+export interface KillzonesResponse {
+  killzones: KillzoneInfo[];
+}
+
+// Приводим в соответствие с бэкендом HealthResponse
 export interface HealthStatus {
+  status: string;
   redis: string;
+  timestamp: string;
 }
 
-// Расширяем настройки согласно бэкенду
+// Расширяем настройки согласно бэкенду (пока нет в схемах, но используется в API)
 export interface Settings {
   min_divergence_threshold: number;
   lookback_period: number;
@@ -54,6 +64,81 @@ export interface Settings {
   min_fvg_gap_size: number;
   quarterly_months: number[];
   monthly_bias_days: number[];
+}
+
+// Добавляем типы согласно бэкенду
+export interface SMTAnalysisResponse {
+  signals: SMTSignal[];
+  total_count: number;
+  analysis_timestamp: string;
+  market_phase?: string;
+}
+
+export interface TrueOpenResponse {
+  daily?: number;
+  weekly?: number;
+  quarterly?: number;
+  timestamp: string;
+}
+
+export interface TrueOpensResponse {
+  es_opens: TrueOpenResponse;
+  nq_opens: TrueOpenResponse;
+}
+
+export interface FractalPoint {
+  timestamp: string;
+  price: number;
+  type: string; // 'high' or 'low'
+  index: number;
+}
+
+export interface FractalsResponse {
+  symbol: string;
+  high_fractals: FractalPoint[];
+  low_fractals: FractalPoint[];
+  timestamp: string;
+}
+
+export interface VolumeAnomalyResponse {
+  timestamp: string;
+  volume: number;
+  avg_volume: number;
+  volume_ratio: number;
+  anomaly_type: string;
+  significance: number;
+}
+
+// Перечисления типов сигналов как в бэкенде
+export const SMTSignalType = {
+  SMT_BULLISH_DIVERGENCE: "smt_bullish_divergence",
+  SMT_BEARISH_DIVERGENCE: "smt_bearish_divergence",
+  FALSE_BREAK_UP: "false_break_up",
+  FALSE_BREAK_DOWN: "false_break_down",
+  VOLUME_SPIKE: "volume_spike",
+  VOLUME_DIVERGENCE_BULLISH: "volume_divergence_bullish",
+  VOLUME_DIVERGENCE_BEARISH: "volume_divergence_bearish",
+  JUDAS_SWING_BULLISH: "judas_swing_bullish",
+  JUDAS_SWING_BEARISH: "judas_swing_bearish"
+} as const;
+
+export type SMTSignalTypeValue = typeof SMTSignalType[keyof typeof SMTSignalType];
+
+// Фильтры согласно бэкенду
+export interface SMTAnalysisFilter {
+  signal_types?: SMTSignalTypeValue[];
+  min_strength?: number; // от 0 до 1
+  confirmed_only?: boolean;
+  time_from?: string; // ISO datetime string
+  time_to?: string; // ISO datetime string
+}
+
+export interface AnalysisStatsResponse {
+  total_signals: number;
+  confirmed_signals: number;
+  signal_distribution: Record<string, number>;
+  avg_strength: number;
+  last_analysis: string;
 }
 
 // Дополнительные типы для улучшенной работы с API
@@ -125,16 +210,6 @@ export interface ChartConfig {
   showGrid: boolean;
 }
 
-// Тип для фильтрации SMT сигналов
-export interface SMTSignalFilter {
-  signal_type?: SMTSignal['signal_type'];
-  min_strength?: number;
-  max_strength?: number;
-  date_from?: string;
-  date_to?: string;
-  confirmation_only?: boolean;
-}
-
 // Тип для пагинации
 export interface PaginationParams {
   page: number;
@@ -142,21 +217,6 @@ export interface PaginationParams {
   total?: number;
   hasNext?: boolean;
   hasPrev?: boolean;
-}
-
-// Расширенный тип рыночных данных с техническими индикаторами
-export interface EnhancedMarketData extends MarketData {
-  technical_indicators?: {
-    rsi?: number;
-    sma_20?: number;
-    ema_20?: number;
-    volume_sma?: number;
-    atr?: number;
-  };
-  support_resistance?: {
-    support_levels: number[];
-    resistance_levels: number[];
-  };
 }
 
 // Тип для экспорта данных
@@ -169,5 +229,3 @@ export interface ExportOptions {
   };
   symbols?: string[];
 }
-
-

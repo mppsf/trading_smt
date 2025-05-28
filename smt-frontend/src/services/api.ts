@@ -1,5 +1,18 @@
 // src/services/api.ts
-import { MarketData, SMTSignal, KillzoneInfo, HealthStatus, Settings } from '../types';
+import { 
+  MarketData, 
+  SMTSignal, 
+  SMTAnalysisResponse,
+  KillzonesResponse,
+  KillzoneInfo,
+  HealthStatus, 
+  Settings,
+  TrueOpensResponse,
+  FractalsResponse,
+  VolumeAnomalyResponse,
+  AnalysisStatsResponse,
+  SMTAnalysisFilter
+} from '../types';
 
 const BASE = 'http://localhost:8000';
 
@@ -64,6 +77,7 @@ async function apiRequest<T>(
   }
 }
 
+// Получение рыночных данных согласно бэкенду MarketDataResponse
 export async function fetchMarketData(
   symbols: string, 
   timeframe = '5m', 
@@ -73,70 +87,79 @@ export async function fetchMarketData(
   return apiRequest<MarketData[]>(url);
 }
 
-export async function fetchSMTSignals(limit = 50): Promise<SMTSignal[]> {
-  const url = `${BASE}/api/v1/smt-signals?limit=${limit}`;
-  return apiRequest<SMTSignal[]>(url);
-}
-
-// Адаптируем под структуру бэкенда
-export async function fetchKillzones(): Promise<KillzoneInfo> {
-  const url = `${BASE}/api/v1/killzones`;
+// Получение SMT сигналов согласно бэкенду SMTAnalysisResponse
+export async function fetchSMTSignals(
+  limit = 50,
+  filter?: SMTAnalysisFilter
+): Promise<SMTAnalysisResponse> {
+  let url = `${BASE}/api/v1/smt-signals?limit=${limit}`;
   
-  try {
-    const response = await apiRequest<{ killzones: any[] }>(url);
-    
-    // Адаптируем ответ бэкенда под ожидаемую структуру фронтенда
-    if (response.killzones && response.killzones.length > 0) {
-      const currentKillzone = response.killzones[0]; // Берем первую зону как текущую
-      
-      return {
-        current: currentKillzone.name || null,
-        time_remaining: currentKillzone.time_remaining || "00:00:00",
-        next_session: currentKillzone.next_session || "Unknown",
-        priority: currentKillzone.priority || "medium"
-      };
+  if (filter) {
+    const params = new URLSearchParams();
+    if (filter.signal_types?.length) {
+      params.append('signal_types', filter.signal_types.join(','));
+    }
+    if (filter.min_strength !== undefined) {
+      params.append('min_strength', filter.min_strength.toString());
+    }
+    if (filter.confirmed_only !== undefined) {
+      params.append('confirmed_only', filter.confirmed_only.toString());
+    }
+    if (filter.time_from) {
+      params.append('time_from', filter.time_from);
+    }
+    if (filter.time_to) {
+      params.append('time_to', filter.time_to);
     }
     
-    // Fallback если нет данных
-    return {
-      current: null,
-      time_remaining: "00:00:00",
-      next_session: "Unknown",
-      priority: "low" as const
-    };
-  } catch (error) {
-    console.warn('Killzones API not available, using fallback data');
-    return {
-      current: null,
-      time_remaining: "00:00:00", 
-      next_session: "Market Closed",
-      priority: "low" as const
-    };
+    if (params.toString()) {
+      url += `&${params.toString()}`;
+    }
   }
+  
+  return apiRequest<SMTAnalysisResponse>(url);
 }
 
-// Адаптируем под структуру бэкенда
+// Получение killzones согласно бэкенду
+export async function fetchKillzones(): Promise<KillzonesResponse> {
+  const url = `${BASE}/api/v1/killzones`;
+  return apiRequest<KillzonesResponse>(url);
+}
+
+// Получение health статуса согласно бэкенду HealthResponse
 export async function fetchHealth(): Promise<HealthStatus> {
   const url = `${BASE}/health`;
-  
-  try {
-    const response = await apiRequest<{
-      status: string;
-      redis: string;
-      timestamp: string;
-    }>(url);
-    
-    // Адаптируем под ожидаемую структуру фронтенда
-    return {
-      redis: response.redis || response.status || "unknown"
-    };
-  } catch (error) {
-    return {
-      redis: "offline"
-    };
-  }
+  return apiRequest<HealthStatus>(url);
 }
 
+// Получение True Opens согласно бэкенду
+export async function fetchTrueOpens(): Promise<TrueOpensResponse> {
+  const url = `${BASE}/api/v1/true-opens`;
+  return apiRequest<TrueOpensResponse>(url);
+}
+
+// Получение фракталов согласно бэкенду
+export async function fetchFractals(symbol: string, limit = 50): Promise<FractalsResponse> {
+  const url = `${BASE}/api/v1/fractals?symbol=${symbol}&limit=${limit}`;
+  return apiRequest<FractalsResponse>(url);
+}
+
+// Получение аномалий объема согласно бэкенду
+export async function fetchVolumeAnomalies(
+  symbol: string, 
+  limit = 50
+): Promise<VolumeAnomalyResponse[]> {
+  const url = `${BASE}/api/v1/volume-anomalies?symbol=${symbol}&limit=${limit}`;
+  return apiRequest<VolumeAnomalyResponse[]>(url);
+}
+
+// Получение статистики анализа согласно бэкенду
+export async function fetchAnalysisStats(): Promise<AnalysisStatsResponse> {
+  const url = `${BASE}/api/v1/analysis-stats`;
+  return apiRequest<AnalysisStatsResponse>(url);
+}
+
+// Настройки (пока не определены в бэкенде, но используются в коде)
 export async function fetchSettings(): Promise<Settings> {
   const url = `${BASE}/api/v1/settings`;
   return apiRequest<Settings>(url);
@@ -165,45 +188,77 @@ export async function checkApiHealth(): Promise<boolean> {
 // Batch запрос для получения всех данных разом
 export async function fetchAllData(): Promise<{
   marketData: MarketData[];
-  smtSignals: SMTSignal[];
-  killzones: KillzoneInfo;
-  settings: Settings;
+  smtAnalysis: SMTAnalysisResponse;
+  killzones: KillzonesResponse;
+  trueOpens: TrueOpensResponse;
   health: HealthStatus;
+  analysisStats: AnalysisStatsResponse;
 }> {
   try {
-    const [marketData, smtSignals, killzones, settings, health] = await Promise.allSettled([
+    const [
+      marketData, 
+      smtAnalysis, 
+      killzones, 
+      trueOpens,
+      health,
+      analysisStats
+    ] = await Promise.allSettled([
       fetchMarketData('QQQ,SPY'),
       fetchSMTSignals(),
       fetchKillzones(),
-      fetchSettings(),
-      fetchHealth()
+      fetchTrueOpens(),
+      fetchHealth(),
+      fetchAnalysisStats()
     ]);
 
     return {
       marketData: marketData.status === 'fulfilled' ? marketData.value : [],
-      smtSignals: smtSignals.status === 'fulfilled' ? smtSignals.value : [],
+      smtAnalysis: smtAnalysis.status === 'fulfilled' ? smtAnalysis.value : {
+        signals: [],
+        total_count: 0,
+        analysis_timestamp: new Date().toISOString(),
+        market_phase: null
+      },
       killzones: killzones.status === 'fulfilled' ? killzones.value : {
-        current: null,
-        time_remaining: "00:00:00",
-        next_session: "Unknown",
-        priority: "low" as const
+        killzones: []
       },
-      settings: settings.status === 'fulfilled' ? settings.value : {
-        min_divergence_threshold: 0.5,
-        lookback_period: 20,
-        swing_threshold: 0.02,
-        lookback_swings: 5,
-        min_block_size: 100000,
-        volume_threshold: 1000000,
-        min_fvg_gap_size: 0.001,
-        quarterly_months: [3, 6, 9, 12],
-        monthly_bias_days: [1, 2, 3, 15, 16, 17]
+      trueOpens: trueOpens.status === 'fulfilled' ? trueOpens.value : {
+        es_opens: { timestamp: new Date().toISOString() },
+        nq_opens: { timestamp: new Date().toISOString() }
       },
-      health: health.status === 'fulfilled' ? health.value : { redis: "offline" }
+      health: health.status === 'fulfilled' ? health.value : {
+        status: "unknown",
+        redis: "offline",
+        timestamp: new Date().toISOString()
+      },
+      analysisStats: analysisStats.status === 'fulfilled' ? analysisStats.value : {
+        total_signals: 0,
+        confirmed_signals: 0,
+        signal_distribution: {},
+        avg_strength: 0,
+        last_analysis: new Date().toISOString()
+      }
     };
   } catch (error) {
     console.error('Error fetching all data:', error);
     throw error;
+  }
+}
+
+// Хелпер для получения только сигналов (для обратной совместимости)
+export async function fetchSMTSignalsLegacy(limit = 50): Promise<SMTSignal[]> {
+  const response = await fetchSMTSignals(limit);
+  return response.signals;
+}
+
+// Хелпер для получения текущей активной killzone
+export async function fetchCurrentKillzone(): Promise<KillzoneInfo | null> {
+  try {
+    const response = await fetchKillzones();
+    return response.killzones.find(kz => kz.is_active) || response.killzones[0] || null;
+  } catch (error) {
+    console.warn('Error fetching current killzone:', error);
+    return null;
   }
 }
 
