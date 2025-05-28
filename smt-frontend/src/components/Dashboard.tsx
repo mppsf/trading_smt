@@ -24,7 +24,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 }) => (
   <main className="max-w-7xl mx-auto px-4 py-6">
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Левая часть: только карточки с ценами */}
+    
       <div className="lg:col-span-2 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {Object.keys(marketData).length === 0 ? (
@@ -36,6 +36,8 @@ const Dashboard: React.FC<DashboardProps> = ({
               <PriceDisplay key={data.symbol} data={data} />
             ))
           )}
+        <SMTSignalsPanel signals={smtSignals} onRefresh={onRefreshSignals} />
+
         </div>
       </div>
       
@@ -43,7 +45,6 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="space-y-6">
         <SystemStatusPanel health={healthStatus} />
         <KillzoneStatus info={killzoneInfo} />
-        <SMTSignalsPanel signals={smtSignals} onRefresh={onRefreshSignals} />
         <SettingsPanel />
       </div>
     </div>
