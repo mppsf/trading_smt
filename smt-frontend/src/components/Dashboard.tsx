@@ -1,10 +1,11 @@
+// src/components/Dashboard.tsx
 import React from 'react';
 import PriceDisplay from './PriceDisplay';
 import SMTSignalsPanel from './SMTSignalsPanel';
 import KillzoneStatus from './KillzoneStatus';
 import SystemStatusPanel from './SystemStatusPanel';
-import { MarketData, SMTSignal, KillzoneInfo, HealthStatus } from '../types';
 import SettingsPanel from './SettingsPanel';
+import { MarketData, SMTSignal, KillzoneInfo, HealthStatus } from '../types';
 
 interface DashboardProps {
   marketData: Record<string, MarketData>;
@@ -14,22 +15,37 @@ interface DashboardProps {
   onRefreshSignals: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ marketData, smtSignals, killzoneInfo, healthStatus, onRefreshSignals }) => (
-  <main className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-    {/* Левая часть: цены и график */}
-    <div className="lg:col-span-2 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {Object.values(marketData).map(md => <PriceDisplay key={md.symbol} data={md} />)}
+const Dashboard: React.FC<DashboardProps> = ({ 
+  marketData, 
+  smtSignals, 
+  killzoneInfo, 
+  healthStatus, 
+  onRefreshSignals 
+}) => (
+  <main className="max-w-7xl mx-auto px-4 py-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Левая часть: только карточки с ценами */}
+      <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.keys(marketData).length === 0 ? (
+            <div className="col-span-2 bg-gray-900 border border-gray-700 rounded-xl p-8 text-center">
+              <div className="text-gray-400">No market data available</div>
+            </div>
+          ) : (
+            Object.values(marketData).map(data => (
+              <PriceDisplay key={data.symbol} data={data} />
+            ))
+          )}
+        </div>
       </div>
-      {/* Тут добавьте Price Comparison Chart */}
-    </div>
-    {/* Сайдбар */}
-    <div className="space-y-6">
-      <SystemStatusPanel health={healthStatus} />
-      <KillzoneStatus info={killzoneInfo} />
-      <SMTSignalsPanel signals={smtSignals} onRefresh={onRefreshSignals} />
-      <SettingsPanel/>
       
+      {/* Правая часть: статусы и настройки */}
+      <div className="space-y-6">
+        <SystemStatusPanel health={healthStatus} />
+        <KillzoneStatus info={killzoneInfo} />
+        <SMTSignalsPanel signals={smtSignals} onRefresh={onRefreshSignals} />
+        <SettingsPanel />
+      </div>
     </div>
   </main>
 );

@@ -1,5 +1,6 @@
 // src/components/SettingsPanel.tsx
 import React, { useEffect, useState } from 'react';
+import { Settings as SettingsIcon } from 'lucide-react';
 import { Settings } from '../types';
 import { fetchSettings, updateSettings } from '../services/api';
 
@@ -14,18 +15,16 @@ const SettingsPanel: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
 
-  // Загрузка настроек при монтировании
   useEffect(() => {
     fetchSettings()
       .then(setSettings)
-      .catch(() => setError('Не удалось загрузить настройки'));
+      .catch(() => setError('Failed to load settings'));
   }, []);
 
-  // Обработка изменения любого поля
   const handleChange = (key: keyof Settings, raw: string) => {
     if (!settings) return;
     let value: number | number[];
-    // Если поле — массив чисел
+    
     if (Array.isArray(settings[key])) {
       value = raw
         .split(',')
@@ -37,7 +36,6 @@ const SettingsPanel: React.FC = () => {
     setSettings({ ...settings, [key]: value } as Settings);
   };
 
-  // Сохранение на бэкенд
   const handleSave = async () => {
     if (!settings) return;
     setIsSaving(true);
@@ -47,7 +45,7 @@ const SettingsPanel: React.FC = () => {
       await updateSettings(settings);
       setSuccess(true);
     } catch {
-      setError('Не удалось сохранить настройки');
+      setError('Failed to save settings');
     } finally {
       setIsSaving(false);
       setTimeout(() => setSuccess(false), 2000);
@@ -56,8 +54,8 @@ const SettingsPanel: React.FC = () => {
 
   if (!settings) {
     return (
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 text-gray-400">
-        Загрузка настроек…
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+        <div className="text-gray-400">Loading settings...</div>
       </div>
     );
   }
@@ -65,12 +63,13 @@ const SettingsPanel: React.FC = () => {
   const entries = Object.entries(settings) as [keyof Settings, number | number[]][];
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 mb-6">
-      <h2 className="text-xl font-semibold text-white mb-4">
-        Настройки SMT-анализа
-      </h2>
+    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+        <SettingsIcon className="w-5 h-5 mr-2 text-orange-400" />
+        SMT Settings
+      </h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-4">
         {entries.map(([key, val]) => {
           const isArray = Array.isArray(val);
           const displayValue = isArray ? (val as number[]).join(',') : String(val);
@@ -78,7 +77,7 @@ const SettingsPanel: React.FC = () => {
             <div key={key} className="flex flex-col">
               <label
                 htmlFor={String(key)}
-                className="text-gray-300 mb-1 font-medium"
+                className="text-gray-300 mb-1 text-sm font-medium"
               >
                 {humanize(String(key))}
               </label>
@@ -87,11 +86,11 @@ const SettingsPanel: React.FC = () => {
                 type="text"
                 value={displayValue}
                 onChange={e => handleChange(key, e.target.value)}
-                className="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               {isArray && (
                 <small className="text-gray-500 mt-1">
-                  Ввод: числа, разделённые запятыми
+                  Enter numbers separated by commas
                 </small>
               )}
             </div>
@@ -100,19 +99,14 @@ const SettingsPanel: React.FC = () => {
       </div>
 
       <div className="flex items-center justify-end mt-6 space-x-4">
-        {error && <span className="text-red-400">{error}</span>}
-        {success && <span className="text-green-400">Сохранено!</span>}
+        {error && <span className="text-red-400 text-sm">{error}</span>}
+        {success && <span className="text-green-400 text-sm">Saved!</span>}
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className={`
-            flex items-center gap-2 
-            bg-blue-600 hover:bg-blue-500 
-            disabled:bg-gray-600 disabled:cursor-not-allowed
-            text-white font-medium rounded px-4 py-2 transition
-          `}
+          className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded px-4 py-2 text-sm transition"
         >
-          {isSaving ? 'Сохранение…' : 'Сохранить'}
+          {isSaving ? 'Saving...' : 'Save'}
         </button>
       </div>
     </div>
