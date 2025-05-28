@@ -1,11 +1,20 @@
 // src/services/api.ts
 import { 
   MarketData, 
-  SMTSignal, 
+  SMTSignal,
   SMTAnalysisResponse,
-  KillzoneInfo,
+  AnalysisStats,
+  TrueOpensResponse,
+  FractalsResponse,
+  VolumeAnomaly,
+  KillzonesResponse,
   HealthStatus, 
-  Settings
+  Settings,
+  ErrorResponse,
+  SMTSignalsParams,
+  MarketDataParams,
+  FractalsParams,
+  VolumeAnomaliesParams
 } from '../types';
 
 const BASE = 'http://localhost:8000';
@@ -28,7 +37,7 @@ async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
       const errorText = await response.text();
       let errorMessage = `HTTP ${response.status}`;
       try {
-        const errorJson = JSON.parse(errorText);
+        const errorJson: ErrorResponse = JSON.parse(errorText);
         errorMessage = errorJson.detail || errorMessage;
       } catch {
         errorMessage = errorText || errorMessage;
@@ -38,8 +47,7 @@ async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
 
     const contentType = response.headers.get('content-type');
     if (contentType?.includes('application/json')) {
-      const data = await response.json();
-      return data;
+      return await response.json();
     } else {
       return await response.text() as unknown as T;
     }
@@ -52,139 +60,104 @@ async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   }
 }
 
-export const fetchMarketData = async (symbols: string): Promise<MarketData[]> => {
-  try {
-    const data = await apiRequest<MarketData[]>(`${BASE}/api/v1/market-data?symbols=${symbols}`);
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error('Failed to fetch market data:', error);
-    return [];
-  }
-};
-
-// ИСПРАВЛЕНО: Теперь правильно обрабатываем ответ SMTAnalysisResponse
-export const fetchSMTSignals = async (): Promise<SMTSignal[]> => {
-  try {
-    const response = await apiRequest<SMTAnalysisResponse>(`${BASE}/api/v1/smt-signals`);
-    
-    // Бэкенд возвращает объект SMTAnalysisResponse с полем signals
-    if (response && Array.isArray(response.signals)) {
-      return response.signals;
+function buildQueryString(params: Record<string, any>): string {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      if (Array.isArray(value)) {
+        searchParams.append(key, value.join(','));
+      } else {
+        searchParams.append(key, String(value));
+      }
     }
-    
-    // Если структура неожиданная, проверяем является ли сам ответ массивом
-    if (Array.isArray(response)) {
-      return response as SMTSignal[];
-    }
-    
-    console.warn('Unexpected SMT signals response structure:', response);
-    return [];
-  } catch (error) {
-    console.error('Failed to fetch SMT signals:', error);
-    return [];
-  }
+  });
+  return searchParams.toString();
+}
+
+// Health
+export const fetchHealth = async (): Promise<HealthStatus> => {
+  return apiRequest<HealthStatus>(`${BASE}/health`);
 };
 
-export const fetchKillzones = async (): Promise<KillzoneInfo | null> => {
-  try {
-    const data = await apiRequest<KillzoneInfo>(`${BASE}/api/v1/killzones`);
-    return data;
-  } catch (error) {
-    console.error('Failed to fetch killzones:', error);
-    return null;
-  }
-};
-
-export const fetchHealth = async (): Promise<HealthStatus | null> => {
-  try {
-    const data = await apiRequest<HealthStatus>(`${BASE}/health`);
-    return data;
-  } catch (error) {
-    console.error('Failed to fetch health status:', error);
-    return null;
-  }
-};
-
+// Settings
 export const fetchSettings = async (): Promise<Settings> => {
-  try {
-    const data = await apiRequest<Settings>(`${BASE}/api/v1/settings`);
-    
-    // Проверяем, что все обязательные поля присутствуют
-    const requiredFields = [
-      'smt_strength_threshold', 
-      'killzone_priorities', 
-      'refresh_interval', 
-      'max_signals_display'
-    ];
-    
-    const hasAllRequired = requiredFields.every(field => 
-      data && typeof data[field as keyof Settings] !== 'undefined'
-    );
-    
-    if (!hasAllRequired) {
-      throw new Error('Invalid settings response: missing required fields');
-    }
-    
-    // Возвращаем данные с дефолтными значениями для дополнительных полей
-    const defaultSettings: Settings = {
-      smt_strength_threshold: 0.7,
-      killzone_priorities: [1, 2, 3],
-      refresh_interval: 30000,
-      max_signals_display: 10,
-      divergence_threshold: 0.5,
-      confirmation_candles: 3,
-      volume_multiplier: 1.5,
-      london_open: "08:00",
-      ny_open: "13:30",
-      asia_open: "00:00"
-    };
-    
-    return { ...defaultSettings, ...data };
-  } catch (error) {
-    console.error('Failed to fetch settings:', error);
-    // Возвращаем дефолтные настройки при ошибке
-    return {
-      smt_strength_threshold: 0.7,
-      killzone_priorities: [1, 2, 3],
-      refresh_interval: 30000,
-      max_signals_display: 10,
-      divergence_threshold: 0.5,
-      confirmation_candles: 3,
-      volume_multiplier: 1.5,
-      london_open: "08:00",
-      ny_open: "13:30",
-      asia_open: "00:00"
-    };
-  }
+  const data = await apiRequest<Settings>(`${BASE}/api/v1/settings`);
+  return data;
 };
 
 export const updateSettings = async (payload: Partial<Settings>): Promise<Settings> => {
-  try {
-    // Фильтруем пустые значения
-    const cleanPayload = Object.fromEntries(
-      Object.entries(payload).filter(([_, value]) => value !== undefined && value !== null)
-    );
-    
-    if (Object.keys(cleanPayload).length === 0) {
-      throw new Error('No valid settings to update');
-    }
-    
-    const data = await apiRequest<Settings>(`${BASE}/api/v1/settings`, {
-      method: 'PUT',
-      body: JSON.stringify(cleanPayload),
-    });
-    
-    return data;
-  } catch (error) {
-    console.error('Failed to update settings:', error);
-    throw error;
+  const cleanPayload = Object.fromEntries(
+    Object.entries(payload).filter(([_, value]) => value !== undefined && value !== null)
+  );
+  
+  if (Object.keys(cleanPayload).length === 0) {
+    throw new Error('No valid settings to update');
   }
+  
+  return apiRequest<Settings>(`${BASE}/api/v1/settings`, {
+    method: 'PUT',
+    body: JSON.stringify(cleanPayload),
+  });
 };
 
-// УЛУЧШЕННАЯ версия fetchAllData с лучшей обработкой ошибок
+// Market Data
+export const fetchMarketData = async (params: MarketDataParams = {}): Promise<MarketData[]> => {
+  const defaultParams = {
+    symbols: 'ES=F,NQ=F',
+    timeframe: '5m' as const,
+    limit: 100
+  };
+  
+  const queryString = buildQueryString({ ...defaultParams, ...params });
+  return apiRequest<MarketData[]>(`${BASE}/api/v1/market-data?${queryString}`);
+};
+
+// SMT Analysis
+export const fetchSMTAnalysis = async (params: Partial<SMTSignalsParams> = {}): Promise<SMTAnalysisResponse> => {
+  const queryString = buildQueryString(params);
+  const url = queryString ? `${BASE}/api/v1/smt-analysis?${queryString}` : `${BASE}/api/v1/smt-analysis`;
+  return apiRequest<SMTAnalysisResponse>(url);
+};
+
+export const fetchSMTSignals = async (params: SMTSignalsParams = {}): Promise<SMTSignal[]> => {
+  const queryString = buildQueryString(params);
+  const url = queryString ? `${BASE}/api/v1/smt-signals?${queryString}` : `${BASE}/api/v1/smt-signals`;
+  const response = await apiRequest<SMTAnalysisResponse>(url);
+  return response.signals || [];
+};
+
+export const fetchSMTStats = async (): Promise<AnalysisStats> => {
+  return apiRequest<AnalysisStats>(`${BASE}/api/v1/smt-analysis/stats`);
+};
+
+// True Opens
+export const fetchTrueOpens = async (): Promise<TrueOpensResponse> => {
+  return apiRequest<TrueOpensResponse>(`${BASE}/api/v1/true-opens`);
+};
+
+// Fractals
+export const fetchFractals = async (params: FractalsParams = {}): Promise<FractalsResponse> => {
+  const defaultParams = { symbol: 'ES=F', limit: 20 };
+  const queryString = buildQueryString({ ...defaultParams, ...params });
+  return apiRequest<FractalsResponse>(`${BASE}/api/v1/fractals?${queryString}`);
+};
+
+// Volume Anomalies
+export const fetchVolumeAnomalies = async (params: VolumeAnomaliesParams = {}): Promise<VolumeAnomaly[]> => {
+  const defaultParams = { symbol: 'ES=F', threshold: 2.0, limit: 10 };
+  const queryString = buildQueryString({ ...defaultParams, ...params });
+  return apiRequest<VolumeAnomaly[]>(`${BASE}/api/v1/volume-anomalies?${queryString}`);
+};
+
+// Killzones
+export const fetchKillzones = async (): Promise<KillzonesResponse> => {
+  return apiRequest<KillzonesResponse>(`${BASE}/api/v1/killzones`);
+};
+
+// Комплексная загрузка данных
 export const fetchAllData = async () => {
-  const [market, signals, killzone, health, settings] = await Promise.allSettled([
-    fetchMarketData('ES=F,NQ=F'), // Используем правильные символы для фьючерсов
+  const [market, signals, killzones, health, settings] = await Promise.allSettled([
+    fetchMarketData(),
     fetchSMTSignals(),
     fetchKillzones(),
     fetchHealth(),
@@ -194,32 +167,29 @@ export const fetchAllData = async () => {
   return {
     marketData: market.status === 'fulfilled' ? market.value : [],
     smtSignals: signals.status === 'fulfilled' ? signals.value : [],
-    killzones: killzone.status === 'fulfilled' ? killzone.value : null,
+    killzones: killzones.status === 'fulfilled' ? killzones.value : null,
     health: health.status === 'fulfilled' ? health.value : null,
     settings: settings.status === 'fulfilled' ? settings.value : null,
     errors: {
       market: market.status === 'rejected' ? market.reason : null,
       signals: signals.status === 'rejected' ? signals.reason : null,
-      killzone: killzone.status === 'rejected' ? killzone.reason : null,
+      killzones: killzones.status === 'rejected' ? killzones.reason : null,
       health: health.status === 'rejected' ? health.reason : null,
       settings: settings.status === 'rejected' ? settings.reason : null,
     }
   };
 };
 
-// Вспомогательные функции для работы с API
-
-// Проверка доступности API
+// Дополнительные утилиты
 export const checkApiHealth = async (): Promise<boolean> => {
   try {
     const health = await fetchHealth();
-    return health?.status === 'healthy';
+    return health.status === 'healthy';
   } catch {
     return false;
   }
 };
 
-// Валидация настроек перед отправкой
 export const validateSettings = (settings: Partial<Settings>): string[] => {
   const errors: string[] = [];
   
@@ -231,8 +201,8 @@ export const validateSettings = (settings: Partial<Settings>): string[] => {
   
   if (settings.killzone_priorities !== undefined) {
     if (!Array.isArray(settings.killzone_priorities) || 
-        !settings.killzone_priorities.every(p => Number.isInteger(p) && p >= 1 && p <= 5)) {
-      errors.push('Killzone priorities must be integers between 1 and 5');
+        !settings.killzone_priorities.every(p => Number.isInteger(p))) {
+      errors.push('Killzone priorities must be array of integers');
     }
   }
   
@@ -243,18 +213,35 @@ export const validateSettings = (settings: Partial<Settings>): string[] => {
   }
   
   if (settings.max_signals_display !== undefined) {
-    if (!Number.isInteger(settings.max_signals_display) || 
-        settings.max_signals_display < 1 || settings.max_signals_display > 100) {
-      errors.push('Max signals display must be between 1 and 100');
+    if (!Number.isInteger(settings.max_signals_display) || settings.max_signals_display < 1) {
+      errors.push('Max signals display must be positive integer');
     }
   }
   
-  // Проверка времени
+  if (settings.divergence_threshold !== undefined) {
+    if (settings.divergence_threshold < 0.1 || settings.divergence_threshold > 2.0) {
+      errors.push('Divergence threshold must be between 0.1 and 2.0');
+    }
+  }
+  
+  if (settings.confirmation_candles !== undefined) {
+    if (!Number.isInteger(settings.confirmation_candles) || 
+        settings.confirmation_candles < 1 || settings.confirmation_candles > 10) {
+      errors.push('Confirmation candles must be between 1 and 10');
+    }
+  }
+  
+  if (settings.volume_multiplier !== undefined) {
+    if (settings.volume_multiplier < 1.0 || settings.volume_multiplier > 5.0) {
+      errors.push('Volume multiplier must be between 1.0 and 5.0');
+    }
+  }
+  
   const timeFields = ['london_open', 'ny_open', 'asia_open'] as const;
   timeFields.forEach(field => {
     const timeValue = settings[field];
     if (timeValue !== undefined) {
-      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      const timeRegex = /^[0-2][0-9]:[0-5][0-9]$/;
       if (!timeRegex.test(timeValue)) {
         errors.push(`${field.replace('_', ' ')} must be in HH:MM format`);
       }

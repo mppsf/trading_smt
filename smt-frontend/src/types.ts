@@ -12,23 +12,34 @@ export interface OHLCVData {
 export interface MarketData {
   symbol: string;
   current_price: number;
-  change_percent: number;
-  volume: number;
+  change_percent?: number;
+  volume?: number;
   timestamp: string;
   ohlcv: OHLCVData[];
-  market_state: string;
+  market_state?: 'open' | 'closed' | 'pre_market' | 'after_hours' | 'unknown';
+}
+
+// Обновленный enum согласно схеме API
+export enum SMTSignalType {
+  SMT_BULLISH_DIVERGENCE = "smt_bullish_divergence",
+  SMT_BEARISH_DIVERGENCE = "smt_bearish_divergence", 
+  FALSE_BREAK_UP = "false_break_up",
+  FALSE_BREAK_DOWN = "false_break_down",
+  VOLUME_SPIKE = "volume_spike",
+  VOLUME_DIVERGENCE_BULLISH = "volume_divergence_bullish",
+  VOLUME_DIVERGENCE_BEARISH = "volume_divergence_bearish",
+  JUDAS_SWING_BULLISH = "judas_swing_bullish",
+  JUDAS_SWING_BEARISH = "judas_swing_bearish"
 }
 
 export interface SMTSignal {
-  id: string;
   timestamp: string;
-  signal_type: string;
-  strength: number;
+  signal_type: SMTSignalType;
+  strength: number; // 0.0 - 1.0
   nasdaq_price: number;
   sp500_price: number;
   divergence_percentage: number;
   confirmation_status: boolean;
-  market_phase?: string;
   details: Record<string, any>;
 }
 
@@ -36,54 +47,76 @@ export interface SMTAnalysisResponse {
   signals: SMTSignal[];
   total_count: number;
   analysis_timestamp: string;
-  market_phase: string | null;
+  market_phase?: 'trending' | 'consolidation' | 'reversal' | 'breakout' | 'unknown';
 }
 
-export interface KillzoneInfo {
-  killzones: Array<{
-    name: string;
-    start_time: string;
-    end_time: string;
-    priority: number;
-    active: boolean;
-  }>;
-  current?: string;
-  next_session?: string;
-  time_remaining?: string;
-  priority?: 'high' | 'medium' | 'low';
+export interface AnalysisStats {
+  total_signals: number;
+  confirmed_signals: number;
+  signal_distribution: Record<string, number>;
+  avg_strength: number;
+  last_analysis: string;
 }
 
-export interface HealthStatus {
-  status: string;
-  redis: string;
+export interface TrueOpensResponse {
+  es_opens: TrueOpenData;
+  nq_opens: TrueOpenData;
+}
+
+export interface TrueOpenData {
+  daily?: number | null;
+  weekly?: number | null;
+  quarterly?: number | null;
   timestamp: string;
 }
 
-// Исправленный интерфейс настроек с соответствием бэкенду
+export interface FractalPoint {
+  timestamp: string;
+  price: number;
+  type: 'high' | 'low';
+  index: number;
+}
+
+export interface FractalsResponse {
+  symbol: string;
+  high_fractals: FractalPoint[];
+  low_fractals: FractalPoint[];
+  timestamp: string;
+}
+
+export interface VolumeAnomaly {
+  timestamp: string;
+  volume: number;
+  avg_volume: number;
+  volume_ratio: number;
+  anomaly_type: string;
+  significance: number;
+}
+
+export interface Killzone {
+  name: string;
+  start_time: string;
+  end_time: string;
+  description?: string;
+  is_active: boolean;
+  timezone?: string;
+}
+
+export interface KillzonesResponse {
+  killzones: Killzone[];
+}
+
+export interface HealthStatus {
+  status: 'healthy' | 'unhealthy' | 'unknown';
+  redis: 'connected' | 'disconnected' | 'unknown';
+  timestamp: string;
+}
+
 export interface Settings {
-  // Основные настройки
   smt_strength_threshold: number;
   killzone_priorities: number[];
   refresh_interval: number;
   max_signals_display: number;
-  
-  // Дополнительные параметры SMT
-  divergence_threshold: number;
-  confirmation_candles: number;
-  volume_multiplier: number;
-  
-  // Настройки времени торговых сессий
-  london_open: string;
-  ny_open: string;
-  asia_open: string;
-}
-
-// Тип для частичного обновления настроек
-export interface SettingsUpdateRequest {
-  smt_strength_threshold?: number;
-  killzone_priorities?: number[];
-  refresh_interval?: number;
-  max_signals_display?: number;
   divergence_threshold?: number;
   confirmation_candles?: number;
   volume_multiplier?: number;
@@ -92,36 +125,54 @@ export interface SettingsUpdateRequest {
   asia_open?: string;
 }
 
-// Ответ API при получении данных
-export interface ApiResponse<T> {
-  data: T;
-  status: 'success' | 'error';
-  message?: string;
+export interface SettingsUpdateRequest extends Partial<Settings> {}
+
+export interface ErrorResponse {
+  detail: string;
 }
 
-// Дополнительные типы для валидации
-export interface SettingsValidationRules {
-  smt_strength_threshold: { min: number; max: number };
-  killzone_priorities: { validValues: number[] };
-  refresh_interval: { min: number };
-  max_signals_display: { min: number; max: number };
-  divergence_threshold: { min: number; max: number };
-  confirmation_candles: { min: number; max: number };
-  volume_multiplier: { min: number; max: number };
+export interface ValidationErrorResponse {
+  detail: string;
 }
 
-// Константы для валидации
-export const SETTINGS_VALIDATION: SettingsValidationRules = {
-  smt_strength_threshold: { min: 0.0, max: 1.0 },
-  killzone_priorities: { validValues: [1, 2, 3, 4, 5] },
-  refresh_interval: { min: 1000 },
-  max_signals_display: { min: 1, max: 100 },
-  divergence_threshold: { min: 0.1, max: 2.0 },
-  confirmation_candles: { min: 1, max: 10 },
-  volume_multiplier: { min: 1.0, max: 5.0 }
-};
+// Параметры для получения сигналов
+export interface SMTSignalsParams {
+  limit?: number;
+  signal_type?: string;
+  min_strength?: number;
+  confirmed_only?: boolean;
+  smt_strength_threshold?: number;
+  divergence_threshold?: number;
+  confirmation_candles?: number;
+  volume_multiplier?: number;
+  max_signals_display?: number;
+  refresh_interval?: number;
+  london_open?: string;
+  ny_open?: string;
+  asia_open?: string;
+  killzone_priorities?: string;
+}
 
-// Дефолтные настройки
+// Параметры для рыночных данных
+export interface MarketDataParams {
+  symbols?: string;
+  timeframe?: '5m' | '15m' | '1h' | '1d';
+  limit?: number;
+}
+
+// Параметры для фракталов
+export interface FractalsParams {
+  symbol?: string;
+  limit?: number;
+}
+
+// Параметры для аномалий объема
+export interface VolumeAnomaliesParams {
+  symbol?: string;
+  threshold?: number;
+  limit?: number;
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   smt_strength_threshold: 0.7,
   killzone_priorities: [1, 2, 3],
@@ -134,19 +185,3 @@ export const DEFAULT_SETTINGS: Settings = {
   ny_open: "13:30",
   asia_open: "00:00"
 };
-
-// Enum для типов сигналов
-export enum SMTSignalType {
-  BULLISH_DIVERGENCE = "bullish_divergence",
-  BEARISH_DIVERGENCE = "bearish_divergence",
-  FALSE_BREAK = "false_break",
-  VOLUME_ANOMALY = "volume_anomaly",
-  JUDAS_SWING = "judas_swing"
-}
-
-// Тип для статуса сохранения настроек
-export interface SettingsSaveStatus {
-  saving: boolean;
-  error: string;
-  success: boolean;
-}
