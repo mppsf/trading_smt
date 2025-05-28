@@ -6,7 +6,7 @@ import uvicorn
 from app.core.config import settings
 from app.core.websocket_manager import WebSocketManager
 from app.services.market_data_collector import MarketDataCollector
-from backend.app.services.smart_money_service import SmartMoneyAnalyzer
+from app.services.smart_money_service import SmartMoneyService
 from app.tasks.background_tasks import start_background_tasks
 
 # Импорт роутеров
@@ -47,7 +47,7 @@ app.include_router(websocket_router)
 
 # Инициализация сервисов
 market_collector = MarketDataCollector()
-smt_analyzer = SmartMoneyAnalyzer()
+smt_analyzer = SmartMoneyService()
 websocket_manager = WebSocketManager()
 
 @app.on_event("startup")
