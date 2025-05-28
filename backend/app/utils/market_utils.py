@@ -19,3 +19,18 @@ async def get_current_market_phase() -> Optional[str]:
             return "Q4_Rebalance"
     except:
         return None
+from datetime import datetime, timezone
+
+async def get_current_market_phase():
+    """Определение текущей фазы рынка"""
+    now = datetime.now(timezone.utc)
+    hour = now.hour
+    
+    if 8 <= hour < 16:
+        return "london"
+    elif 13 <= hour < 21:
+        return "new_york" 
+    elif 23 <= hour or hour < 8:
+        return "asia"
+    else:
+        return "overlap"
