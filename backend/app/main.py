@@ -7,9 +7,9 @@ from app.core.config import settings
 from app.core.websocket_manager import WebSocketManager
 from app.services.market_data_collector import MarketDataCollector
 from app.services.smart_money_service import SmartMoneyService
+from app.services.killzone_service import KillzoneService
 from app.tasks.background_tasks import start_background_tasks
 
-# Импорт роутеров
 from app.health_router import router as health_router
 from app.settings_router import router as settings_router
 from app.market_data_router import router as market_data_router
@@ -37,7 +37,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Регистрация роутеров
 app.include_router(health_router)
 app.include_router(settings_router)
 app.include_router(market_data_router)
@@ -45,15 +44,15 @@ app.include_router(smt_analysis_router)
 app.include_router(killzones_router)
 app.include_router(websocket_router)
 
-# Инициализация сервисов
 market_collector = MarketDataCollector()
-smt_analyzer = SmartMoneyService()
+smt_service = SmartMoneyService()
+killzone_service = KillzoneService()
 websocket_manager = WebSocketManager()
 
 @app.on_event("startup")
 async def on_startup():
     logger.info("Starting Smart Money Trading Analyzer...")
-    await start_background_tasks(app, market_collector, smt_analyzer, websocket_manager)
+    await start_background_tasks(app, market_collector, smt_service, websocket_manager)
 
 @app.on_event("shutdown")
 async def on_shutdown():

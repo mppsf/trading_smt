@@ -5,30 +5,28 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 
 from app.services.market_data_collector import MarketDataCollector, MarketSnapshot
-from app.services.smart_money_service import SMTAnalyzer, SMTSignal
+from app.services.smart_money_service import SmartMoneyService
 from app.core.websocket_manager import WebSocketManager
 
 logger = logging.getLogger(__name__)
 
 class BackgroundTaskManager:
-    def __init__(self, collector: MarketDataCollector, analyzer: SMTAnalyzer, manager: WebSocketManager):
+    def __init__(self, collector: MarketDataCollector, smt_service: SmartMoneyService, ws_manager: WebSocketManager):
         self.collector = collector
-        self.analyzer = analyzer
-        self.manager = manager
+        self.smt_service = smt_service
+        self.ws_manager = ws_manager
         self.task = None
         self.running = False
+        self.last_run = None
         
     async def start(self):
-        """Start background data collection and analysis"""
         if self.running:
             return
-            
         self.running = True
         self.task = asyncio.create_task(self._run_loop())
         logger.info("Background tasks started")
         
     async def stop(self):
-        """Stop background tasks"""
         self.running = False
         if self.task:
             self.task.cancel()
@@ -39,133 +37,90 @@ class BackgroundTaskManager:
         logger.info("Background tasks stopped")
         
     async def _run_loop(self):
-        """Main background loop"""
         while self.running:
+            start_time = asyncio.get_event_loop().time()
+            
             try:
-                # Collect market data
-                logger.debug("Collecting market data...")
                 market_data = await self.collector.collect_realtime_data()
                 
                 if market_data:
-                    # Analyze SMT signals
-                    logger.debug("Analyzing SMT signals...")
-                    smt_signals = await self.analyzer.analyze_all(market_data)
+                    signals = await self.smt_service.analyze(market_data)
+                    broadcast_data = self._prepare_broadcast_data(market_data, signals)
                     
-                    # Get killzone info
-                    killzone_info = self.analyzer.killzone_manager.get_killzone_info()
-                    
-                    # Prepare broadcast data
-                    broadcast_data = await self._prepare_broadcast_data(
-                        market_data, smt_signals, killzone_info
-                    )
-                    
-                    # Broadcast updates via WebSocket
-                    await self.manager.broadcast(broadcast_data)
-                    
-                    logger.info(f"Broadcasted update: {len(market_data)} symbols, {len(smt_signals)} signals")
+                    try:
+                        await self.ws_manager.broadcast(broadcast_data)
+                        logger.debug(f"Broadcasted: {len(market_data)} symbols, {len(signals)} signals")
+                    except Exception as ws_error:
+                        logger.error(f"WebSocket broadcast failed: {ws_error}")
                 else:
                     logger.warning("No market data collected")
                 
             except Exception as e:
-                logger.error(f"Error in background task loop: {e}")
+                logger.error(f"Background task error: {e}")
                 
-            # Wait before next iteration (30 seconds)
+            elapsed = asyncio.get_event_loop().time() - start_time
+            sleep_time = max(0, 30 - elapsed)
+            
             try:
-                await asyncio.sleep(30)
+                await asyncio.sleep(sleep_time)
             except asyncio.CancelledError:
                 break
                 
-    async def _prepare_broadcast_data(self, market_data: Dict[str, MarketSnapshot], 
-                                    smt_signals: list[SMTSignal], 
-                                    killzone_info) -> Dict[str, Any]:
-        """Prepare data for WebSocket broadcast"""
+    def _prepare_broadcast_data(self, market_data: Dict[str, MarketSnapshot], signals: list) -> Dict[str, Any]:
         try:
-            # Convert market data
-            market_data_dict = {}
-            for symbol, snapshot in market_data.items():
-                market_data_dict[symbol] = {
-                    "symbol": snapshot.symbol,
-                    "current_price": float(snapshot.current_price),
-                    "change_percent": float(snapshot.change_percent),
-                    "volume": int(snapshot.volume),
-                    "timestamp": snapshot.timestamp,
-                    "market_state": snapshot.market_state
-                }
-            
-            # Convert SMT signals
-            signals_list = []
-            for signal in smt_signals:
-                # Map signal types for frontend compatibility
-                frontend_signal_type = signal.signal_type
-                if signal.signal_type not in ['bullish_divergence', 'bearish_divergence']:
-                    frontend_signal_type = 'neutral'
-                    
-                signals_list.append({
-                    "timestamp": signal.timestamp,
-                    "signal_type": frontend_signal_type,
-                    "strength": float(signal.strength),
-                    "nasdaq_price": float(signal.nasdaq_price),
-                    "sp500_price": float(signal.sp500_price),
-                    "divergence_percentage": float(signal.divergence_percentage),
-                    "confirmation_status": bool(signal.confirmation_status),
-                    "details": getattr(signal, 'details', {})
-                })
-            
-            # Convert killzone info
-            killzone_data = {
-                "current": killzone_info.current,
-                "time_remaining": killzone_info.time_remaining,
-                "next_session": killzone_info.next_session,
-                "priority": killzone_info.priority
+            market_dict = {
+                symbol: {
+                    "symbol": snap.symbol,
+                    "current_price": float(snap.current_price),
+                    "change_percent": float(snap.change_percent),
+                    "volume": int(snap.volume),
+                    "timestamp": snap.timestamp,
+                    "market_state": snap.market_state
+                } for symbol, snap in market_data.items()
             }
+            
+            signals_list = [{
+                "timestamp": s.timestamp if hasattr(s, 'timestamp') else datetime.now(timezone.utc).isoformat(),
+                "signal_type": getattr(s, 'signal_type', 'neutral'),
+                "strength": float(getattr(s, 'strength', 0)),
+                "details": getattr(s, 'details', {})
+            } for s in signals]
             
             return {
                 "type": "market_update",
                 "data": {
-                    "market_data": market_data_dict,
-                    "smt_signals": signals_list,
-                    "killzone_info": killzone_data,
+                    "market_data": market_dict,
+                    "signals": signals_list,
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
             }
             
         except Exception as e:
-            logger.error(f"Error preparing broadcast data: {e}")
+            logger.error(f"Broadcast data preparation error: {e}")
             return {
                 "type": "error",
-                "data": {
-                    "message": "Error preparing market data",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }
+                "data": {"message": "Data preparation failed", "timestamp": datetime.now(timezone.utc).isoformat()}
             }
 
-# Global task manager instance
 task_manager: BackgroundTaskManager = None
 
-async def start_background_tasks(app: FastAPI,
-                               collector: MarketDataCollector,
-                               analyzer: SMTAnalyzer,
-                               manager: WebSocketManager):
-    """Initialize and start background tasks"""
+async def start_background_tasks(app: FastAPI, collector: MarketDataCollector, smt_service: SmartMoneyService, ws_manager: WebSocketManager):
     global task_manager
-    
     try:
-        task_manager = BackgroundTaskManager(collector, analyzer, manager)
+        task_manager = BackgroundTaskManager(collector, smt_service, ws_manager)
         await task_manager.start()
         
-        # Add shutdown handler
         async def shutdown_handler():
             if task_manager:
                 await task_manager.stop()
-                
-        app.add_event_handler("shutdown", shutdown_handler)
         
+        app.add_event_handler("shutdown", shutdown_handler)
+                
     except Exception as e:
         logger.error(f"Failed to start background tasks: {e}")
         raise
 
 async def stop_background_tasks():
-    """Stop background tasks"""
     global task_manager
     if task_manager:
         await task_manager.stop()
