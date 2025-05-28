@@ -1,231 +1,242 @@
-// src/types.ts
-export interface OHLCV {
-  timestamp: string;
-  Open: number;
-  High: number;
-  Low: number;
-  Close: number;
-  Volume: number;
-}
+// src/types/index.ts
+// Базовые типы данных согласно бэкенду
 
+// Market Data Types
 export interface MarketData {
   symbol: string;
-  price: number; // Изменено с current_price на price (как в бэкенде)
-  volume?: number; // Сделано опциональным как в бэкенде
+  current_price: number;
+  change_percent: number;
+  volume?: number;
   timestamp: string;
-  // Убираем поля которых нет в бэкенде
-  // change_percent: number;
-  // ohlcv_5m: OHLCV[];
-  // market_state?: string;
+  market_state?: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
 }
 
-// Приводим в соответствие с бэкендом SMTSignalResponse
+// SMT Signal Types
 export interface SMTSignal {
+  id: string;
   timestamp: string;
-  signal_type: string; // Изменено на string как в бэкенде
-  strength: number; // от 0 до 1
+  signal_type: 'bullish_divergence' | 'bearish_divergence' | 'neutral';
+  strength: number; // 0-1
+  divergence_percentage: number;
   nasdaq_price: number;
   sp500_price: number;
-  divergence_percentage: number;
   confirmation_status: boolean;
-  details: Record<string, any>; // Изменено с any на Record для лучшей типизации
+  details?: Record<string, any>;
+  market_phase?: string;
 }
 
-// Приводим в соответствие с бэкендом KillzoneInfo
-export interface KillzoneInfo {
-  name: string;
-  start_time: string;
-  end_time: string;
-  description?: string;
-  is_active?: boolean;
-  timezone?: string;
-}
-
-// Ответ для killzones согласно бэкенду
-export interface KillzonesResponse {
-  killzones: KillzoneInfo[];
-}
-
-// Приводим в соответствие с бэкендом HealthResponse
-export interface HealthStatus {
-  status: string;
-  redis: string;
-  timestamp: string;
-}
-
-// Расширяем настройки согласно бэкенду (пока нет в схемах, но используется в API)
-export interface Settings {
-  min_divergence_threshold: number;
-  lookback_period: number;
-  swing_threshold: number;
-  lookback_swings: number;
-  min_block_size: number;
-  volume_threshold: number;
-  min_fvg_gap_size: number;
-  quarterly_months: number[];
-  monthly_bias_days: number[];
-}
-
-// Добавляем типы согласно бэкенду
 export interface SMTAnalysisResponse {
   signals: SMTSignal[];
   total_count: number;
   analysis_timestamp: string;
-  market_phase?: string;
+  market_phase: string | null;
+  summary?: {
+    bullish_count: number;
+    bearish_count: number;
+    avg_strength: number;
+    confirmed_signals: number;
+  };
 }
 
-export interface TrueOpenResponse {
-  daily?: number;
-  weekly?: number;
-  quarterly?: number;
+export interface SMTAnalysisFilter {
+  signal_types?: string[];
+  min_strength?: number;
+  confirmed_only?: boolean;
+  time_from?: string;
+  time_to?: string;
+}
+
+// Killzone Types
+export interface KillzoneInfo {
+  name: string;
+  start_time: string;
+  end_time: string;
+  is_active: boolean;
+  priority: 'high' | 'medium' | 'low';
+  description?: string;
+  time_remaining?: string;
+  next_session?: string;
+}
+
+export interface KillzonesResponse {
+  killzones: KillzoneInfo[];
+  current_session?: KillzoneInfo;
+  next_session?: KillzoneInfo;
+}
+
+// True Opens Types
+export interface TrueOpenData {
   timestamp: string;
+  price?: number;
+  identified?: boolean;
+  confirmation_candles?: number;
 }
 
 export interface TrueOpensResponse {
-  es_opens: TrueOpenResponse;
-  nq_opens: TrueOpenResponse;
+  es_opens: TrueOpenData;
+  nq_opens: TrueOpenData;
+  analysis_timestamp?: string;
 }
 
+// Fractals Types
 export interface FractalPoint {
   timestamp: string;
   price: number;
-  type: string; // 'high' or 'low'
-  index: number;
+  type: 'high' | 'low';
+  strength: number;
+  confirmed: boolean;
 }
 
 export interface FractalsResponse {
+  fractals: FractalPoint[];
   symbol: string;
-  high_fractals: FractalPoint[];
-  low_fractals: FractalPoint[];
-  timestamp: string;
+  timeframe: string;
+  total_count: number;
 }
 
+// Volume Anomaly Types
 export interface VolumeAnomalyResponse {
   timestamp: string;
+  symbol: string;
   volume: number;
   avg_volume: number;
-  volume_ratio: number;
-  anomaly_type: string;
-  significance: number;
+  anomaly_ratio: number;
+  severity: 'low' | 'medium' | 'high';
+  price_impact?: number;
 }
 
-// Перечисления типов сигналов как в бэкенде
-export const SMTSignalType = {
-  SMT_BULLISH_DIVERGENCE: "smt_bullish_divergence",
-  SMT_BEARISH_DIVERGENCE: "smt_bearish_divergence",
-  FALSE_BREAK_UP: "false_break_up",
-  FALSE_BREAK_DOWN: "false_break_down",
-  VOLUME_SPIKE: "volume_spike",
-  VOLUME_DIVERGENCE_BULLISH: "volume_divergence_bullish",
-  VOLUME_DIVERGENCE_BEARISH: "volume_divergence_bearish",
-  JUDAS_SWING_BULLISH: "judas_swing_bullish",
-  JUDAS_SWING_BEARISH: "judas_swing_bearish"
-} as const;
-
-export type SMTSignalTypeValue = typeof SMTSignalType[keyof typeof SMTSignalType];
-
-// Фильтры согласно бэкенду
-export interface SMTAnalysisFilter {
-  signal_types?: SMTSignalTypeValue[];
-  min_strength?: number; // от 0 до 1
-  confirmed_only?: boolean;
-  time_from?: string; // ISO datetime string
-  time_to?: string; // ISO datetime string
-}
-
+// Analysis Stats Types
 export interface AnalysisStatsResponse {
   total_signals: number;
   confirmed_signals: number;
   signal_distribution: Record<string, number>;
   avg_strength: number;
   last_analysis: string;
-}
-
-// Дополнительные типы для улучшенной работы с API
-
-// Тип для состояния загрузки
-export interface LoadingState {
-  isLoading: boolean;
-  error?: string;
-  lastUpdated?: string;
-}
-
-// Тип для WebSocket сообщений
-export interface WebSocketMessage {
-  type: 'market_update' | 'smt_signal' | 'system_status';
-  data: any;
-  timestamp: string;
-}
-
-// Тип для статуса соединения
-export interface ConnectionStatus {
-  api: 'connected' | 'disconnected' | 'error';
-  websocket: 'connected' | 'disconnected' | 'error';
-  redis: 'connected' | 'disconnected' | 'unknown';
-}
-
-// Расширенный тип настроек с метаданными
-export interface SettingsWithMeta extends Settings {
-  _metadata?: {
-    lastUpdated: string;
-    version: string;
-    source: 'api' | 'local' | 'default';
+  performance_metrics?: {
+    accuracy?: number;
+    profit_factor?: number;
+    win_rate?: number;
   };
 }
 
-// Тип для batch операций
-export interface BatchResponse<T> {
-  data?: T;
-  error?: string;
-  status: 'success' | 'error' | 'partial';
+// Health Status Types
+export interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+  redis: 'healthy' | 'offline' | 'error';
+  timestamp: string;
+  details?: Record<string, any>;
+  uptime?: number;
 }
 
-// Типы для различных состояний компонентов
-export interface ComponentState<T> {
-  data: T | null;
-  loading: boolean;
+// Settings Types (для конфигурации фронтенда)
+export interface Settings {
+  smt_strength_threshold: number;
+  killzone_priorities: number[];
+  refresh_interval: number;
+  max_signals_display: number;
+  enable_notifications: boolean;
+  chart_timeframes: string[];
+  [key: string]: number | number[] | boolean | string[];
+}
+
+// UI State Types
+export interface DashboardState {
+  isLoading: boolean;
   error: string | null;
-  lastFetch?: Date;
+  lastUpdate: Date | null;
+  connectionStatus: 'connected' | 'disconnected' | 'reconnecting';
 }
 
-// Тип для системных уведомлений
-export interface SystemNotification {
+// Notification Types
+export interface NotificationData {
   id: string;
-  type: 'info' | 'warning' | 'error' | 'success';
+  type: 'info' | 'success' | 'warning' | 'error';
   title: string;
   message: string;
   timestamp: Date;
-  autoClose?: boolean;
-  duration?: number;
+  read: boolean;
 }
 
-// Тип для конфигурации Chart компонентов
+// Chart Types
+export interface ChartDataPoint {
+  timestamp: string;
+  value: number;
+  volume?: number;
+  metadata?: Record<string, any>;
+}
+
 export interface ChartConfig {
-  symbol: string;
   timeframe: string;
-  indicators: string[];
-  theme: 'light' | 'dark';
-  height: number;
-  showVolume: boolean;
-  showGrid: boolean;
+  indicator_types: string[];
+  show_volume: boolean;
+  show_signals: boolean;
 }
 
-// Тип для пагинации
+// Filter and Pagination Types
 export interface PaginationParams {
   page: number;
   limit: number;
   total?: number;
-  hasNext?: boolean;
-  hasPrev?: boolean;
 }
 
-// Тип для экспорта данных
-export interface ExportOptions {
-  format: 'json' | 'csv' | 'xlsx';
-  data_type: 'market_data' | 'smt_signals' | 'all';
-  date_range?: {
-    from: string;
-    to: string;
-  };
-  symbols?: string[];
+export interface FilterParams {
+  search?: string;
+  date_from?: string;
+  date_to?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+}
+
+// WebSocket Message Types
+export interface WebSocketMessage {
+  type: 'market_data' | 'smt_signal' | 'killzone_update' | 'health_update';
+  data: any;
+  timestamp: string;
+}
+
+// API Response Wrapper
+export interface ApiResponse<T> {
+  data: T;
+  status: 'success' | 'error';
+  message?: string;
+  timestamp: string;
+}
+
+// Error Types
+export interface ApiError {
+  message: string;
+  status: number;
+  details?: Record<string, any>;
+}
+
+// Component Props Types
+export interface BaseComponentProps {
+  className?: string;
+  loading?: boolean;
+  error?: string | null;
+}
+
+// Hook Return Types
+export interface UseApiResult<T> {
+  data: T | null;
+  loading: boolean;
+  error: string | null;
+  lastFetch: Date | null;
+  execute: () => Promise<void>;
+  refresh: () => void;
+}
+
+export interface UseRealtimeDataResult {
+  marketData: Record<string, MarketData>;
+  smtSignals: SMTSignal[];
+  killzoneInfo: KillzoneInfo | null;
+  healthStatus: HealthStatus | null;
+  loading: boolean;
+  error: string | null;
+  lastUpdate: Date | null;
+  refresh: () => Promise<void>;
 }
