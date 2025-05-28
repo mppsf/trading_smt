@@ -56,6 +56,12 @@ const SignalCard = memo<{ signal: SMTSignal; index: number }>(({ signal, index }
         <span className="w-2 h-2 rounded-full bg-current mr-2"></span>
         {signal.confirmation_status ? 'Confirmed' : 'Pending'}
       </span>
+      
+      {signal.details && (
+        <div className="mt-2 text-xs text-gray-500">
+          Details available
+        </div>
+      )}
     </div>
   );
 });
@@ -81,10 +87,7 @@ const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({
         </h3>
         
         <div className="flex items-center space-x-2">
-          <button
-            className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-white"
-            title="Filter signals"
-          >
+          <button className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-white" title="Filter signals">
             <Filter className="w-4 h-4" />
           </button>
           <button
@@ -128,4 +131,4 @@ const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({
 });
 
 SMTSignalsPanel.displayName = 'SMTSignalsPanel';
-export default SMTSignalsPanel;
+export default SMTSignalsPanel; 

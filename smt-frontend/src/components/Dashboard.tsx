@@ -24,9 +24,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 }) => (
   <main className="max-w-7xl mx-auto px-4 py-6">
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Левая и центральная часть */}
       <div className="lg:col-span-2 space-y-6">
-        {/* Рыночные данные */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {Object.keys(marketData).length === 0 ? (
             <div className="col-span-2 bg-gray-900 border border-gray-700 rounded-xl p-8 text-center">
@@ -38,12 +36,8 @@ const Dashboard: React.FC<DashboardProps> = ({
             ))
           )}
         </div>
-        
-        {/* SMT Сигналы - отдельной строкой */}
         <SMTSignalsPanel signals={smtSignals} onRefresh={onRefreshSignals} />
       </div>
-      
-      {/* Правая часть: статусы и настройки */}
       <div className="space-y-6">
         <SystemStatusPanel health={healthStatus} />
         <KillzoneStatus info={killzoneInfo} />
