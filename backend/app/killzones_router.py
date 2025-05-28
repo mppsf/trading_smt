@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 import logging
 
-from app.schemas import KillzonesResponse
+from backend.app.schemas.schemas import KillzonesResponse
 from app.services.killzone import KillzoneService
 
 logger = logging.getLogger(__name__)

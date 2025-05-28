@@ -30,7 +30,7 @@ zones = await killzone.get_killzones()  # List[KillzoneInfo]
 ```python
 # Standard pipeline
 collector = MarketDataCollector()
-data = await collector.get_cached_data() or await collector.collect_realtime_data()
+data = await collector.get_cached_data() or await collector.collect_realtime_data(  )
 smt = SmartMoneyService()
 signals = await smt.analyze(data)
 ```

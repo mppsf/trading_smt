@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import logging
 
-from app.schemas import (
+from backend.app.schemas.schemas import (
     SMTAnalysisResponse, SMTSignalResponse, AnalysisStatsResponse,
     TrueOpensResponse, TrueOpenResponse, FractalsResponse, FractalPoint
 )

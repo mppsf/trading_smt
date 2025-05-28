@@ -3,7 +3,6 @@ from typing import List, Dict, Any, Optional
 
 @dataclass
 class OHLCV:
-    __slots__ = ('timestamp', 'open', 'high', 'low', 'close', 'volume')
     timestamp: str
     open: float
     high: float
@@ -13,7 +12,6 @@ class OHLCV:
 
 @dataclass
 class TechnicalData:
-    __slots__ = ('rsi', 'sma_20', 'ema_12', 'ema_26', 'macd', 'macd_signal', 'bollinger_upper', 'bollinger_lower', 'atr')
     rsi: float = 50.0
     sma_20: float = 0.0
     ema_12: float = 0.0
@@ -26,7 +24,6 @@ class TechnicalData:
 
 @dataclass
 class MarketData:
-    __slots__ = ('symbol', 'price', 'change_pct', 'volume', 'timestamp', 'ohlcv_5m', 'ohlcv_15m', 'technical', 'market_state')
     symbol: str
     price: float
     change_pct: float
@@ -39,7 +36,6 @@ class MarketData:
 
 @dataclass
 class Signal:
-    __slots__ = ('timestamp', 'type', 'strength', 'es_price', 'nq_price', 'divergence_pct', 'confirmed', 'details')
     timestamp: str
     type: str
     strength: float

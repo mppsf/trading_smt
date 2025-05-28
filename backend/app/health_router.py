@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from datetime import datetime, timezone
 import logging
 
-from app.schemas import HealthResponse
+from backend.app.schemas.schemas import HealthResponse
 from app.services.market_data_collector import MarketDataCollector
 
 logger = logging.getLogger(__name__)

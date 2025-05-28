@@ -1,5 +1,5 @@
 from typing import List
-from app.schemas import KillzoneInfo
+from backend.app.schemas.schemas import KillzoneInfo
 
 class KillzoneService:
     def __init__(self):
