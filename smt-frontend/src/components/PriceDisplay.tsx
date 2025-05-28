@@ -8,8 +8,9 @@ interface PriceDisplayProps {
 }
 
 const PriceDisplay = memo<PriceDisplayProps>(({ data }) => {
-  const isPositive = data.change_percent >= 0;
-  const isSignificantChange = Math.abs(data.change_percent) > 1;
+  const changePercent = data.change_percent ?? 0;
+  const isPositive = changePercent >= 0;
+  const isSignificantChange = Math.abs(changePercent) > 1;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -35,7 +36,6 @@ const PriceDisplay = memo<PriceDisplayProps>(({ data }) => {
 
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 hover:border-blue-500/50 transition-all duration-300">
-      {/* Header with Symbol and Status */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-3">
           <h3 className="text-xl font-bold text-white">{data.symbol}</h3>
@@ -58,7 +58,6 @@ const PriceDisplay = memo<PriceDisplayProps>(({ data }) => {
         </div>
       </div>
 
-      {/* Main Price Display */}
       <div className="mb-4">
         <div className="text-3xl font-bold text-white mb-2">
           {formatPrice(data.current_price)}
@@ -66,14 +65,13 @@ const PriceDisplay = memo<PriceDisplayProps>(({ data }) => {
         <div className={`flex items-center space-x-2 text-lg font-medium ${
           isPositive ? 'text-green-400' : 'text-red-400'
         }`}>
-          <span>{formatPercentage(data.change_percent)}</span>
+          <span>{formatPercentage(changePercent)}</span>
           {isSignificantChange && (
             <TrendingUp className="w-4 h-4" />
           )}
         </div>
       </div>
 
-      {/* Additional Info */}
       <div className="space-y-2 text-sm">
         {data.volume && (
           <div className="flex items-center justify-between">
@@ -93,14 +91,13 @@ const PriceDisplay = memo<PriceDisplayProps>(({ data }) => {
         </div>
       </div>
 
-      {/* Visual Price Change Indicator */}
       <div className="mt-4 h-1 bg-gray-800 rounded-full overflow-hidden">
         <div 
           className={`h-full transition-all duration-500 ${
             isPositive ? 'bg-green-400' : 'bg-red-400'
           }`}
           style={{ 
-            width: `${Math.min(Math.abs(data.change_percent) * 10, 100)}%` 
+            width: `${Math.min(Math.abs(changePercent) * 10, 100)}%` 
           }}
         />
       </div>
