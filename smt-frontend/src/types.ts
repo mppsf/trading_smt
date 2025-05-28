@@ -20,6 +20,7 @@ export interface MarketData {
 }
 
 export interface SMTSignal {
+  id: string;
   timestamp: string;
   signal_type: string;
   strength: number;
@@ -27,6 +28,7 @@ export interface SMTSignal {
   sp500_price: number;
   divergence_percentage: number;
   confirmation_status: boolean;
+  market_phase?: string;
   details: Record<string, any>;
 }
 
@@ -45,6 +47,10 @@ export interface KillzoneInfo {
     priority: number;
     active: boolean;
   }>;
+  current?: string;
+  next_session?: string;
+  time_remaining?: string;
+  priority?: 'high' | 'medium' | 'low';
 }
 
 export interface HealthStatus {

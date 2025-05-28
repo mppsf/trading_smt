@@ -37,15 +37,21 @@ const SettingsPanel: React.FC = () => {
   const handleSave = async () => {
     if (!settings) return;
   
-    // Преобразуем все строки чисел в настоящие числа перед сохранением
+    const timeKeys = ['london_open', 'ny_open', 'asia_open'];
+  
     const sanitizedSettings: Settings = Object.fromEntries(
       Object.entries(settings).map(([key, value]) => {
         if (Array.isArray(value)) {
           return [key, value];
         } else if (typeof value === 'string') {
+          // Сохраняем как строку, если это поле времени
+          if (timeKeys.includes(key)) {
+            return [key, value];
+          }
+          // Преобразуем в число, если это не поле времени
           const parsed = parseFloat(value);
-          return [key, isNaN(parsed) ? 0 : parsed]; // по желанию: обработка NaN
-        } 
+          return [key, isNaN(parsed) ? 0 : parsed];
+        }
         return [key, value];
       })
     ) as Settings;
