@@ -8,6 +8,7 @@ import {
   FractalsResponse,
   VolumeAnomaly,
   KillzonesResponse,
+  KillzoneInfo,
   HealthStatus, 
   Settings,
   ErrorResponse,
@@ -74,15 +75,12 @@ function buildQueryString(params: Record<string, any>): string {
   return searchParams.toString();
 }
 
-// Health
 export const fetchHealth = async (): Promise<HealthStatus> => {
   return apiRequest<HealthStatus>(`${BASE}/health`);
 };
 
-// Settings
 export const fetchSettings = async (): Promise<Settings> => {
-  const data = await apiRequest<Settings>(`${BASE}/api/v1/settings`);
-  return data;
+  return apiRequest<Settings>(`${BASE}/api/v1/settings`);
 };
 
 export const updateSettings = async (payload: Partial<Settings>): Promise<Settings> => {
@@ -100,61 +98,84 @@ export const updateSettings = async (payload: Partial<Settings>): Promise<Settin
   });
 };
 
-// Market Data
-export const fetchMarketData = async (params: MarketDataParams = {}): Promise<MarketData[]> => {
-  const defaultParams = {
-    symbols: 'ES=F,NQ=F',
-    timeframe: '5m' as const,
-    limit: 100
-  };
+export const fetchMarketData = async (params: MarketDataParams | string = {}): Promise<MarketData[]> => {
+  const queryParams = typeof params === 'string' 
+    ? { symbols: params, timeframe: '5m' as const, limit: 100 }
+    : { symbols: 'ES=F,NQ=F', timeframe: '5m' as const, limit: 100, ...params };
   
-  const queryString = buildQueryString({ ...defaultParams, ...params });
+  const queryString = buildQueryString(queryParams);
   return apiRequest<MarketData[]>(`${BASE}/api/v1/market-data?${queryString}`);
 };
 
-// SMT Analysis
+export const fetchSMTSignals = async (params: SMTSignalsParams = {}): Promise<SMTSignal[]> => {
+  try {
+    const settings = await fetchSettings();
+    const mergedParams = { 
+      limit: settings.max_signals_display,
+      min_strength: settings.smt_strength_threshold,
+      ...params 
+    };
+    
+    const queryString = buildQueryString(mergedParams);
+    const url = queryString ? `${BASE}/api/v1/smt-signals?${queryString}` : `${BASE}/api/v1/smt-signals`;
+    const response = await apiRequest<SMTAnalysisResponse>(url);
+    return response.signals || [];
+  } catch (error) {
+    console.error('Error fetching SMT signals:', error);
+    return [];
+  }
+};
+
 export const fetchSMTAnalysis = async (params: Partial<SMTSignalsParams> = {}): Promise<SMTAnalysisResponse> => {
   const queryString = buildQueryString(params);
   const url = queryString ? `${BASE}/api/v1/smt-analysis?${queryString}` : `${BASE}/api/v1/smt-analysis`;
   return apiRequest<SMTAnalysisResponse>(url);
 };
 
-export const fetchSMTSignals = async (params: SMTSignalsParams = {}): Promise<SMTSignal[]> => {
-  const queryString = buildQueryString(params);
-  const url = queryString ? `${BASE}/api/v1/smt-signals?${queryString}` : `${BASE}/api/v1/smt-signals`;
-  const response = await apiRequest<SMTAnalysisResponse>(url);
-  return response.signals || [];
-};
-
 export const fetchSMTStats = async (): Promise<AnalysisStats> => {
   return apiRequest<AnalysisStats>(`${BASE}/api/v1/smt-analysis/stats`);
 };
 
-// True Opens
 export const fetchTrueOpens = async (): Promise<TrueOpensResponse> => {
   return apiRequest<TrueOpensResponse>(`${BASE}/api/v1/true-opens`);
 };
 
-// Fractals
 export const fetchFractals = async (params: FractalsParams = {}): Promise<FractalsResponse> => {
   const defaultParams = { symbol: 'ES=F', limit: 20 };
   const queryString = buildQueryString({ ...defaultParams, ...params });
   return apiRequest<FractalsResponse>(`${BASE}/api/v1/fractals?${queryString}`);
 };
 
-// Volume Anomalies
 export const fetchVolumeAnomalies = async (params: VolumeAnomaliesParams = {}): Promise<VolumeAnomaly[]> => {
   const defaultParams = { symbol: 'ES=F', threshold: 2.0, limit: 10 };
   const queryString = buildQueryString({ ...defaultParams, ...params });
   return apiRequest<VolumeAnomaly[]>(`${BASE}/api/v1/volume-anomalies?${queryString}`);
 };
 
-// Killzones
-export const fetchKillzones = async (): Promise<KillzonesResponse> => {
-  return apiRequest<KillzonesResponse>(`${BASE}/api/v1/killzones`);
+const convertKillzonesToInfo = (killzones: KillzonesResponse): KillzoneInfo | null => {
+  if (!killzones?.killzones?.length) return null;
+  
+  const active = killzones.killzones.find(k => k.is_active);
+  const inactive = killzones.killzones.filter(k => !k.is_active);
+  
+  return {
+    current: active?.name || null,
+    priority: active ? 'high' : 'low',
+    time_remaining: active ? 'Active' : 'None',
+    next_session: inactive[0]?.name || 'Unknown'
+  };
 };
 
-// Комплексная загрузка данных
+export const fetchKillzones = async (): Promise<KillzoneInfo | null> => {
+  try {
+    const response = await apiRequest<KillzonesResponse>(`${BASE}/api/v1/killzones`);
+    return convertKillzonesToInfo(response);
+  } catch (error) {
+    console.error('Error fetching killzones:', error);
+    return null;
+  }
+};
+
 export const fetchAllData = async () => {
   const [market, signals, killzones, health, settings] = await Promise.allSettled([
     fetchMarketData(),
@@ -180,7 +201,6 @@ export const fetchAllData = async () => {
   };
 };
 
-// Дополнительные утилиты
 export const checkApiHealth = async (): Promise<boolean> => {
   try {
     const health = await fetchHealth();

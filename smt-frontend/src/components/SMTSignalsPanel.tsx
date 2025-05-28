@@ -1,8 +1,7 @@
 // src/components/SMTSignalsPanel.tsx
 import React, { memo } from 'react';
-import { TrendingUp, TrendingDown, RefreshCw, Activity, AlertTriangle } from 'lucide-react';
-import { SMTSignal } from '../types';
-import { Card, EmptyState, StatusBadge } from '../ui';
+import { TrendingUp, TrendingDown, RefreshCw, Activity, AlertTriangle, Target, Volume2, Zap } from 'lucide-react';
+import { SMTSignal, SMTSignalType } from '../types';
 
 interface SMTSignalsPanelProps {
   signals: SMTSignal[];
@@ -11,20 +10,32 @@ interface SMTSignalsPanelProps {
 }
 
 const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ signals, onRefresh, loading = false }) => {
-  const getSignalIcon = (type: SMTSignal['signal_type']) => {
+  const getSignalIcon = (type: SMTSignalType) => {
     switch (type) {
-      case 'bullish_divergence': return <TrendingUp className="w-4 h-4" />;
-      case 'bearish_divergence': return <TrendingDown className="w-4 h-4" />;
+      case 'smt_bullish_divergence': return <TrendingUp className="w-4 h-4" />;
+      case 'smt_bearish_divergence': return <TrendingDown className="w-4 h-4" />;
+      case 'false_break_up': return <Target className="w-4 h-4" />;
+      case 'false_break_down': return <Target className="w-4 h-4" />;
+      case 'volume_spike': return <Volume2 className="w-4 h-4" />;
+      case 'volume_divergence_bullish': return <Volume2 className="w-4 h-4" />;
+      case 'volume_divergence_bearish': return <Volume2 className="w-4 h-4" />;
+      case 'judas_swing_bullish': return <Zap className="w-4 h-4" />;
+      case 'judas_swing_bearish': return <Zap className="w-4 h-4" />;
       default: return <Activity className="w-4 h-4" />;
     }
   };
 
-  const getSignalStatus = (type: SMTSignal['signal_type']) => {
-    switch (type) {
-      case 'bullish_divergence': return 'success';
-      case 'bearish_divergence': return 'error';
-      default: return 'neutral';
-    }
+  const getSignalColor = (type: SMTSignalType) => {
+    const bullishTypes = ['smt_bullish_divergence', 'false_break_up', 'volume_divergence_bullish', 'judas_swing_bullish'];
+    const bearishTypes = ['smt_bearish_divergence', 'false_break_down', 'volume_divergence_bearish', 'judas_swing_bearish'];
+    
+    if (bullishTypes.includes(type)) return 'bg-green-900 text-green-400';
+    if (bearishTypes.includes(type)) return 'bg-red-900 text-red-400';
+    return 'bg-blue-900 text-blue-400';
+  };
+
+  const formatSignalName = (type: SMTSignalType) => {
+    return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   const formatStrength = (strength: number) => `${(strength * 100).toFixed(0)}%`;
@@ -32,7 +43,7 @@ const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ signals, onRefresh, loadin
   const formatTime = (timestamp: string) => new Date(timestamp).toLocaleTimeString();
 
   return (
-    <Card className="space-y-4">
+    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white flex items-center">
           <Activity className="w-5 h-5 mr-2 text-blue-400" />
@@ -49,38 +60,39 @@ const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ signals, onRefresh, loadin
       </div>
 
       {signals.length === 0 ? (
-        <EmptyState
-          icon={<AlertTriangle className="w-12 h-12" />}
-          title="No SMT Signals"
-          description="No signals detected at the moment. They will appear when divergences are found."
-          action={{
-            label: "Refresh",
-            onClick: onRefresh
-          }}
-        />
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 text-center">
+          <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <div className="text-gray-400 mb-2">No SMT Signals</div>
+          <div className="text-gray-500 text-sm mb-4">
+            No signals detected at the moment. They will appear when divergences are found.
+          </div>
+          <button
+            onClick={onRefresh}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+          >
+            Refresh
+          </button>
+        </div>
       ) : (
         <div className="space-y-3 max-h-96 overflow-y-auto">
           {signals.map((signal) => (
             <div
-              key={signal.id}
+              key={signal.id || `${signal.timestamp}-${signal.signal_type}`}
               className="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:border-blue-500/50 transition-colors"
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
-                  <StatusBadge 
-                    status={getSignalStatus(signal.signal_type) as any} 
-                    size="sm" 
-                    withDot
-                  >
+                  <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getSignalColor(signal.signal_type)}`}>
+                    <span className="w-2 h-2 rounded-full bg-current mr-2"></span>
                     {getSignalIcon(signal.signal_type)}
-                    <span className="ml-1 capitalize">
-                      {signal.signal_type.replace('_', ' ')}
+                    <span className="ml-1">
+                      {formatSignalName(signal.signal_type)}
                     </span>
-                  </StatusBadge>
+                  </span>
                   {signal.confirmation_status && (
-                    <StatusBadge status="success" size="sm">
+                    <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-900 text-green-400">
                       Confirmed
-                    </StatusBadge>
+                    </span>
                   )}
                 </div>
                 <span className="text-xs text-gray-400">
@@ -118,7 +130,7 @@ const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ signals, onRefresh, loadin
               {signal.market_phase && (
                 <div className="mt-2 pt-2 border-t border-gray-700">
                   <span className="text-xs text-gray-400">Market Phase: </span>
-                  <span className="text-xs text-blue-400 font-medium">
+                  <span className="text-xs text-blue-400 font-medium capitalize">
                     {signal.market_phase}
                   </span>
                 </div>
@@ -127,7 +139,7 @@ const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ signals, onRefresh, loadin
           ))}
         </div>
       )}
-    </Card>
+    </div>
   );
 });
 

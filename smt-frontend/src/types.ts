@@ -19,28 +19,28 @@ export interface MarketData {
   market_state?: 'open' | 'closed' | 'pre_market' | 'after_hours' | 'unknown';
 }
 
-// Обновленный enum согласно схеме API
-export enum SMTSignalType {
-  SMT_BULLISH_DIVERGENCE = "smt_bullish_divergence",
-  SMT_BEARISH_DIVERGENCE = "smt_bearish_divergence", 
-  FALSE_BREAK_UP = "false_break_up",
-  FALSE_BREAK_DOWN = "false_break_down",
-  VOLUME_SPIKE = "volume_spike",
-  VOLUME_DIVERGENCE_BULLISH = "volume_divergence_bullish",
-  VOLUME_DIVERGENCE_BEARISH = "volume_divergence_bearish",
-  JUDAS_SWING_BULLISH = "judas_swing_bullish",
-  JUDAS_SWING_BEARISH = "judas_swing_bearish"
-}
+export type SMTSignalType = 
+  | "smt_bullish_divergence"
+  | "smt_bearish_divergence" 
+  | "false_break_up"
+  | "false_break_down"
+  | "volume_spike"
+  | "volume_divergence_bullish"
+  | "volume_divergence_bearish"
+  | "judas_swing_bullish"
+  | "judas_swing_bearish";
 
 export interface SMTSignal {
+  id: string;
   timestamp: string;
   signal_type: SMTSignalType;
-  strength: number; // 0.0 - 1.0
+  strength: number;
   nasdaq_price: number;
   sp500_price: number;
   divergence_percentage: number;
   confirmation_status: boolean;
-  details: Record<string, any>;
+  market_phase?: 'trending' | 'consolidation' | 'reversal' | 'breakout' | 'unknown';
+  details?: Record<string, any>;
 }
 
 export interface SMTAnalysisResponse {
@@ -106,6 +106,13 @@ export interface KillzonesResponse {
   killzones: Killzone[];
 }
 
+export interface KillzoneInfo {
+  current: string | null;
+  priority: 'high' | 'medium' | 'low';
+  time_remaining: string;
+  next_session: string;
+}
+
 export interface HealthStatus {
   status: 'healthy' | 'unhealthy' | 'unknown';
   redis: 'connected' | 'disconnected' | 'unknown';
@@ -135,7 +142,6 @@ export interface ValidationErrorResponse {
   detail: string;
 }
 
-// Параметры для получения сигналов
 export interface SMTSignalsParams {
   limit?: number;
   signal_type?: string;
@@ -153,20 +159,17 @@ export interface SMTSignalsParams {
   killzone_priorities?: string;
 }
 
-// Параметры для рыночных данных
 export interface MarketDataParams {
   symbols?: string;
   timeframe?: '5m' | '15m' | '1h' | '1d';
   limit?: number;
 }
 
-// Параметры для фракталов
 export interface FractalsParams {
   symbol?: string;
   limit?: number;
 }
 
-// Параметры для аномалий объема
 export interface VolumeAnomaliesParams {
   symbol?: string;
   threshold?: number;
