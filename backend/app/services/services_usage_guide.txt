@@ -1,0 +1,41 @@
+# Services Quick Reference
+
+## Services
+**MarketDataCollector** - Real-time market data from Yahoo Finance
+```python
+collector = MarketDataCollector()
+data = await collector.collect_realtime_data()  # Dict[str, MarketSnapshot]
+cached = await collector.get_cached_data()
+symbol_data = await collector.get_symbol_data("ES=F")
+```
+
+**SmartMoneyService** - SMT analysis and signals
+```python
+smt = SmartMoneyService()
+signals = await smt.analyze(market_data)  # List[Signal]  
+cached_signals = await smt.get_cached_signals(limit=50)
+```
+
+**KillzoneService** - Trading sessions info
+```python
+killzone = KillzoneService()
+zones = await killzone.get_killzones()  # List[KillzoneInfo]
+```
+
+## Data Models
+**MarketSnapshot**: symbol, current_price, change_percent, volume, timestamp, ohlcv_5m/15m, technical_indicators, market_state
+**TechnicalIndicators**: rsi, sma_20, ema_12/26, macd, macd_signal, bollinger_upper/lower, atr
+
+## Usage Patterns
+```python
+# Standard pipeline
+collector = MarketDataCollector()
+data = await collector.get_cached_data() or await collector.collect_realtime_data()
+smt = SmartMoneyService()
+signals = await smt.analyze(data)
+```
+
+## Config
+- REDIS_URL, TRADING_SYMBOLS=["ES=F","NQ=F"]
+- Cache: 30s market data, 300s signals
+- All async, returns empty on errors
