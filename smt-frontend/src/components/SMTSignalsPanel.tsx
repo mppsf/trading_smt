@@ -2,9 +2,7 @@
 import React, { memo } from 'react';
 import { TrendingUp, TrendingDown, RefreshCw, Activity, AlertTriangle } from 'lucide-react';
 import { SMTSignal } from '../types';
-import { Card } from '../ui/Card';
-import { StatusBadge } from '../ui/StatusBadge';
-import { EmptyState } from '../ui/EmptyState';
+import { Card, EmptyState, StatusBadge } from '../ui';
 
 interface SMTSignalsPanelProps {
   signals: SMTSignal[];
