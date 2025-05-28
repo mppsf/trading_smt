@@ -1,30 +1,42 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Dict, Any, Tuple
 from app.core.data_models import OHLCV, Signal
 from app.core.settings_manager import SettingsManager
-from app.utils.data_helpers import ohlcv_to_df
 
 class BaseAnalyzer(ABC):
     def __init__(self):
-        self.settings = SettingsManager()
+        self.settings_manager = SettingsManager()
+        self.settings = self.settings_manager.to_dict()
     
     @abstractmethod
-    def analyze(self, *args) -> List[Signal]:
+    def analyze(self, *args, **kwargs) -> List[Signal]:
         pass
     
-    def _get_fractals(self, data: List[OHLCV], look_back: int = 2):
-        df = ohlcv_to_df(data)
-        if len(df) < 5:
+    def _get_fractals(self, data: List[OHLCV], period: int = 2) -> Tuple[List[Tuple], List[Tuple]]:
+        if len(data) < period * 2 + 1:
             return [], []
         
         highs, lows = [], []
-        for i in range(look_back, len(df) - look_back):
-            high, low = df['high'].iloc[i], df['low'].iloc[i]
-            
-            if all(high > df['high'].iloc[j] for j in range(i-look_back, i+look_back+1) if j != i):
-                highs.append((i, high, df['timestamp'].iloc[i]))
-            
-            if all(low < df['low'].iloc[j] for j in range(i-look_back, i+look_back+1) if j != i):
-                lows.append((i, low, df['timestamp'].iloc[i]))
         
-        return highs[-5:], lows[-5:]
+        for i in range(period, len(data) - period):
+            # Высокие фракталы
+            is_high_fractal = True
+            for j in range(i - period, i + period + 1):
+                if j != i and data[j].high >= data[i].high:
+                    is_high_fractal = False
+                    break
+            
+            if is_high_fractal:
+                highs.append((i, data[i].high, data[i].timestamp))
+            
+            # Низкие фракталы
+            is_low_fractal = True
+            for j in range(i - period, i + period + 1):
+                if j != i and data[j].low <= data[i].low:
+                    is_low_fractal = False
+                    break
+            
+            if is_low_fractal:
+                lows.append((i, data[i].low, data[i].timestamp))
+        
+        return highs[-20:], lows[-20:]

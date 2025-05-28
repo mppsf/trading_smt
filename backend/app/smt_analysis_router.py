@@ -33,12 +33,82 @@ async def get_smt_signals(
     limit: int = Query(50, description="Максимальное количество сигналов"),
     signal_type: Optional[str] = Query(None, description="Фильтр по типу сигнала"),
     min_strength: Optional[float] = Query(None, ge=0.0, le=1.0, description="Минимальная сила сигнала"),
-    confirmed_only: bool = Query(False, description="Только подтвержденные сигналы")
+    confirmed_only: bool = Query(False, description="Только подтвержденные сигналы"),
+    # Settings parameters
+    smt_strength_threshold: Optional[float] = Query(None, ge=0.0, le=1.0, description="Порог силы SMT сигналов"),
+    divergence_threshold: Optional[float] = Query(None, ge=0.0, le=5.0, description="Порог дивергенции %"),
+    confirmation_candles: Optional[int] = Query(None, ge=1, le=10, description="Количество свечей для подтверждения"),
+    volume_multiplier: Optional[float] = Query(None, ge=1.0, le=5.0, description="Множитель объема"),
+    max_signals_display: Optional[int] = Query(None, ge=1, le=100, description="Максимум сигналов для отображения"),
+    refresh_interval: Optional[int] = Query(None, ge=5000, le=300000, description="Интервал обновления мс"),
+    london_open: Optional[str] = Query(None, description="Время открытия Лондона HH:MM"),
+    ny_open: Optional[str] = Query(None, description="Время открытия Нью-Йорка HH:MM"),
+    asia_open: Optional[str] = Query(None, description="Время открытия Азии HH:MM"),
+    killzone_priorities: Optional[str] = Query(None, description="Приоритеты киллзон через запятую")
 ):
     try:
-        smt_service = SmartMoneyService()
-        signals = await smt_service.get_cached_signals(limit)
+        # Подготовка параметров для анализа
+        analysis_params = {}
         
+        # Собираем только переданные параметры
+        if smt_strength_threshold is not None:
+            analysis_params['smt_strength_threshold'] = smt_strength_threshold
+        if divergence_threshold is not None:
+            analysis_params['divergence_threshold'] = divergence_threshold
+        if confirmation_candles is not None:
+            analysis_params['confirmation_candles'] = confirmation_candles
+        if volume_multiplier is not None:
+            analysis_params['volume_multiplier'] = volume_multiplier
+        if max_signals_display is not None:
+            analysis_params['max_signals_display'] = max_signals_display
+        if refresh_interval is not None:
+            analysis_params['refresh_interval'] = refresh_interval
+        if london_open is not None:
+            analysis_params['london_open'] = london_open
+        if ny_open is not None:
+            analysis_params['ny_open'] = ny_open
+        if asia_open is not None:
+            analysis_params['asia_open'] = asia_open
+        if killzone_priorities is not None:
+            try:
+                priorities = [int(p.strip()) for p in killzone_priorities.split(',')]
+                analysis_params['killzone_priorities'] = priorities
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid killzone_priorities format")
+
+        # Получаем свежие рыночные данные
+        market_collector = MarketDataCollector()
+        es_data = await market_collector.get_symbol_data('ES=F')
+        nq_data = await market_collector.get_symbol_data('NQ=F')
+        
+        if not es_data or not nq_data:
+            raise HTTPException(status_code=404, detail="Market data not available")
+
+        # Создаем сервис с кастомными параметрами
+        smt_service = SmartMoneyService()
+        
+        # Если есть кастомные параметры, выполняем свежий анализ
+        if analysis_params:
+            # Временно обновляем настройки анализаторов
+            original_smt_settings = smt_service.smt_analyzer.settings.copy()
+            original_vol_settings = smt_service.volume_analyzer.settings.copy()
+            
+            # Применяем кастомные параметры
+            smt_service.smt_analyzer.settings.update(analysis_params)
+            smt_service.volume_analyzer.settings.update(analysis_params)
+            
+            # Выполняем свежий анализ
+            market_data = {'ES=F': es_data, 'NQ=F': nq_data}
+            signals = await smt_service.analyze(market_data)
+            
+            # Восстанавливаем оригинальные настройки
+            smt_service.smt_analyzer.settings = original_smt_settings
+            smt_service.volume_analyzer.settings = original_vol_settings
+        else:
+            # Используем кешированные сигналы
+            signals = await smt_service.get_cached_signals(limit)
+
+        # Применяем дополнительные фильтры
         filtered_signals = signals
         
         if signal_type:
@@ -49,7 +119,12 @@ async def get_smt_signals(
         
         if confirmed_only:
             filtered_signals = [s for s in filtered_signals if getattr(s, 'confirmed', False)]
+
+        # Ограничиваем количество результатов
+        final_limit = min(limit, analysis_params.get('max_signals_display', limit))
+        filtered_signals = filtered_signals[:final_limit]
         
+        # Преобразуем в формат ответа
         result_signals = []
         for signal in filtered_signals:
             frontend_signal_type = signal.type
@@ -80,6 +155,8 @@ async def get_smt_signals(
             market_phase=market_phase
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting SMT signals: {e}")
         raise HTTPException(status_code=500, detail=str(e))
