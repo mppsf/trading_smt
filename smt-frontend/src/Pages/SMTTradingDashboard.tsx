@@ -82,7 +82,7 @@ export default SMTTradingDashboard;
 //   refreshInterval: 5000,
 //   enableNotifications: true,
 //   autoRefresh: true,
-//   theme: 'dark'
+//   theme: 'dark'  
 // };
 
 // export default function App() {
@@ -117,3 +117,25 @@ export default SMTTradingDashboard;
 //           });
 //         }
       
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// src/App.tsx
+
+  );
+};
+
+export default App;
