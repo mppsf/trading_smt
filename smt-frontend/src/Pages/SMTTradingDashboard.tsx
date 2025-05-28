@@ -1,21 +1,22 @@
-// src/components/SMTTradingDashboard.tsx
+// src/Pages/SMTTradingDashboard.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import Dashboard from '../components/Dashboard';
 import { MarketData, SMTSignal, KillzoneInfo, HealthStatus } from '../types';
 import { fetchMarketData, fetchSMTSignals, fetchKillzones, fetchHealth } from '../services/api';
 
 const SMTTradingDashboard: React.FC = () => {
-  const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
-  const [smtSignals, setSMTSignals] = useState<SMTSignal[]>([]);
-  const [killzoneInfo, setKillzoneInfo] = useState<KillzoneInfo | null>(null);
-  const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState({
+    marketData: {} as Record<string, MarketData>,
+    smtSignals: [] as SMTSignal[],
+    killzoneInfo: null as KillzoneInfo | null,
+    healthStatus: null as HealthStatus | null,
+    loading: true,
+    error: null as string | null,
+  });
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setState(prev => ({ ...prev, loading: true, error: null }));
       
       const [market, signals, killzone, health] = await Promise.allSettled([
         fetchMarketData('QQQ,SPY'),
@@ -24,29 +25,34 @@ const SMTTradingDashboard: React.FC = () => {
         fetchHealth()
       ]);
 
+      const marketObj: Record<string, MarketData> = {};
       if (market.status === 'fulfilled') {
-        // Адаптируем массив в объект с ключами по символам
-        const marketObj: Record<string, MarketData> = {};
         market.value.forEach(item => {
           marketObj[item.symbol] = item;
         });
-        setMarketData(marketObj);
       }
-      if (signals.status === 'fulfilled') setSMTSignals(signals.value);
-      if (killzone.status === 'fulfilled') setKillzoneInfo(killzone.value);
-      if (health.status === 'fulfilled') setHealthStatus(health.value);
-      
+
+      setState(prev => ({
+        ...prev,
+        marketData: marketObj,
+        smtSignals: signals.status === 'fulfilled' ? signals.value : prev.smtSignals,
+        killzoneInfo: killzone.status === 'fulfilled' ? killzone.value : prev.killzoneInfo,
+        healthStatus: health.status === 'fulfilled' ? health.value : prev.healthStatus,
+        loading: false,
+      }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
-    } finally {
-      setLoading(false);
+      setState(prev => ({
+        ...prev,
+        error: err instanceof Error ? err.message : 'Failed to load data',
+        loading: false,
+      }));
     }
   }, []);
 
   const refreshSignals = useCallback(async () => {
     try {
       const signals = await fetchSMTSignals();
-      setSMTSignals(signals);
+      setState(prev => ({ ...prev, smtSignals: signals }));
     } catch (err) {
       console.error('Failed to refresh signals:', err);
     }
@@ -54,11 +60,11 @@ const SMTTradingDashboard: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 30000); // Refresh every 30 seconds
+    const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, [loadData]);
 
-  if (loading && Object.keys(marketData).length === 0) {
+  if (state.loading && Object.keys(state.marketData).length === 0) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-white text-xl">Loading SMT Dashboard...</div>
@@ -66,12 +72,12 @@ const SMTTradingDashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (state.error) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-400 text-xl mb-4">Error Loading Dashboard</div>
-          <div className="text-gray-400 mb-4">{error}</div>
+          <div className="text-gray-400 mb-4">{state.error}</div>
           <button
             onClick={loadData}
             className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded"
@@ -95,10 +101,10 @@ const SMTTradingDashboard: React.FC = () => {
       </header>
       
       <Dashboard
-        marketData={marketData}
-        smtSignals={smtSignals}
-        killzoneInfo={killzoneInfo}
-        healthStatus={healthStatus}
+        marketData={state.marketData}
+        smtSignals={state.smtSignals}
+        killzoneInfo={state.killzoneInfo}
+        healthStatus={state.healthStatus}
         onRefreshSignals={refreshSignals}
       />
     </div>
