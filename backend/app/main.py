@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import pandas as pd
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Union
 import uvicorn
+from pydantic import BaseModel, Field, ValidationError
 
 from app.core.settings_manager import SettingsManager
 from app.schemas import (
@@ -19,6 +20,50 @@ from app.core.config import settings
 from app.core.websocket_manager import WebSocketManager
 from app.tasks.background_tasks import start_background_tasks
 from app.services.killzone import KillzoneService
+
+# === СХЕМЫ ДЛЯ НАСТРОЕК ===
+class SettingsResponse(BaseModel):
+    """Ответ с настройками системы"""
+    smt_strength_threshold: float = Field(ge=0.0, le=1.0)
+    killzone_priorities: List[int]
+    refresh_interval: int = Field(ge=1000)
+    max_signals_display: int = Field(ge=1, le=100)
+    # Дополнительные параметры
+    divergence_threshold: float = Field(default=0.5, ge=0.1, le=2.0)
+    confirmation_candles: int = Field(default=3, ge=1, le=10)
+    volume_multiplier: float = Field(default=1.5, ge=1.0, le=5.0)
+    london_open: str = Field(default="08:00")
+    ny_open: str = Field(default="13:30")
+    asia_open: str = Field(default="00:00")
+
+class SettingsUpdateRequest(BaseModel):
+    """Запрос на обновление настроек с валидацией"""
+    smt_strength_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
+    killzone_priorities: Optional[List[int]] = None
+    refresh_interval: Optional[int] = Field(None, ge=1000)
+    max_signals_display: Optional[int] = Field(None, ge=1, le=100)
+    divergence_threshold: Optional[float] = Field(None, ge=0.1, le=2.0)
+    confirmation_candles: Optional[int] = Field(None, ge=1, le=10)
+    volume_multiplier: Optional[float] = Field(None, ge=1.0, le=5.0)
+    london_open: Optional[str] = None
+    ny_open: Optional[str] = None
+    asia_open: Optional[str] = None
+
+    def model_post_init(self, __context):
+        """Дополнительная валидация после создания модели"""
+        # Валидация приоритетов killzone
+        if self.killzone_priorities is not None:
+            if not all(isinstance(p, int) and 1 <= p <= 5 for p in self.killzone_priorities):
+                raise ValueError('killzone_priorities должны быть числами от 1 до 5')
+        
+        # Валидация времени
+        for time_field in ['london_open', 'ny_open', 'asia_open']:
+            time_value = getattr(self, time_field)
+            if time_value is not None:
+                try:
+                    datetime.strptime(time_value, '%H:%M')
+                except ValueError:
+                    raise ValueError(f'{time_field} должно быть в формате HH:MM')
 
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
@@ -77,24 +122,74 @@ async def health():
         )
 
 # === НАСТРОЙКИ ===
-@app.get("/api/v1/settings")
+@app.get("/api/v1/settings", response_model=SettingsResponse)
 async def get_settings():
     """Получить текущие настройки системы"""
     try:
-        return settings_manager.to_dict()
+        current_settings = settings_manager.to_dict()
+        
+        # Обеспечиваем наличие всех обязательных полей с дефолтными значениями
+        default_settings = {
+            "smt_strength_threshold": 0.7,
+            "killzone_priorities": [1, 2, 3],
+            "refresh_interval": 30000,
+            "max_signals_display": 10,
+            "divergence_threshold": 0.5,
+            "confirmation_candles": 3,
+            "volume_multiplier": 1.5,
+            "london_open": "08:00",
+            "ny_open": "13:30",
+            "asia_open": "00:00"
+        }
+        
+        # Объединяем с текущими настройками
+        merged_settings = {**default_settings, **current_settings}
+        
+        logger.info(f"Returning settings: {merged_settings}")
+        return SettingsResponse(**merged_settings)
+        
     except Exception as e:
         logger.error(f"Error getting settings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Возвращаем дефолтные настройки при ошибке
+        return SettingsResponse(
+            smt_strength_threshold=0.7,
+            killzone_priorities=[1, 2, 3],
+            refresh_interval=30000,
+            max_signals_display=10
+        )
 
-@app.put("/api/v1/settings")
-async def update_settings(payload: dict = Body(...)):
-    """Обновить настройки системы"""
+@app.put("/api/v1/settings", response_model=SettingsResponse)
+async def update_settings(payload: SettingsUpdateRequest):
+    """Обновить настройки системы с валидацией"""
     try:
-        settings_manager.update(**payload)
-        return settings_manager.to_dict()
+        logger.info(f"Received settings update request: {payload.model_dump(exclude_none=True)}")
+        
+        # Преобразуем Pydantic модель в словарь, исключая None значения
+        update_data = payload.model_dump(exclude_none=True)
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No valid settings provided")
+        
+        # Обновляем настройки через settings_manager
+        settings_manager.update(**update_data)
+        
+        # Получаем обновленные настройки
+        updated_settings = settings_manager.to_dict()
+        
+        logger.info(f"Settings updated successfully: {updated_settings}")
+        
+        # Возвращаем полный набор настроек
+        return await get_settings()
+        
+    except ValidationError as e:
+        logger.error(f"Validation error updating settings: {e}")
+        raise HTTPException(status_code=422, detail=f"Validation error: {str(e)}")
+    except ValueError as e:
+        logger.error(f"Value error updating settings: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error updating settings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # === РЫНОЧНЫЕ ДАННЫЕ ===
 @app.get("/api/v1/market-data")
