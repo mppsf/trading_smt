@@ -1,4 +1,3 @@
-// src/components/SMTSignalsPanel.tsx
 import React, { memo } from 'react';
 import { TrendingUp, TrendingDown, RefreshCw, Activity, AlertTriangle, Target, Volume2, Zap } from 'lucide-react';
 import { SMTSignal, SMTSignalType } from '../types';
@@ -10,56 +9,114 @@ interface SMTSignalsPanelProps {
 }
 
 const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ signals, onRefresh, loading = false }) => {
-  const getSignalIcon = (type: SMTSignalType) => {
-    switch (type) {
-      case 'smt_bullish_divergence': return <TrendingUp className="w-4 h-4" />;
-      case 'smt_bearish_divergence': return <TrendingDown className="w-4 h-4" />;
-      case 'false_break_up': return <Target className="w-4 h-4" />;
-      case 'false_break_down': return <Target className="w-4 h-4" />;
-      case 'volume_spike': return <Volume2 className="w-4 h-4" />;
-      case 'volume_divergence_bullish': return <Volume2 className="w-4 h-4" />;
-      case 'volume_divergence_bearish': return <Volume2 className="w-4 h-4" />;
-      case 'judas_swing_bullish': return <Zap className="w-4 h-4" />;
-      case 'judas_swing_bearish': return <Zap className="w-4 h-4" />;
-      default: return <Activity className="w-4 h-4" />;
-    }
+  const getSignalIcon = (type: SMTSignalType): React.ReactNode => {
+    const iconMap: Record<SMTSignalType, React.ReactNode> = {
+      smt_bullish_divergence: <TrendingUp className="w-4 h-4" />,
+      smt_bearish_divergence: <TrendingDown className="w-4 h-4" />,
+      false_break_up: <Target className="w-4 h-4" />,
+      false_break_down: <Target className="w-4 h-4" />,
+      volume_spike: <Volume2 className="w-4 h-4" />,
+      volume_divergence_bullish: <Volume2 className="w-4 h-4" />,
+      volume_divergence_bearish: <Volume2 className="w-4 h-4" />,
+      judas_swing_bullish: <Zap className="w-4 h-4" />,
+      judas_swing_bearish: <Zap className="w-4 h-4" />
+    };
+    
+    return iconMap[type] || <Activity className="w-4 h-4" />;
   };
 
-  const getSignalColor = (type: SMTSignalType) => {
-    const bullishTypes = ['smt_bullish_divergence', 'false_break_up', 'volume_divergence_bullish', 'judas_swing_bullish'];
-    const bearishTypes = ['smt_bearish_divergence', 'false_break_down', 'volume_divergence_bearish', 'judas_swing_bearish'];
+  const getSignalColor = (type: SMTSignalType): string => {
+    const bullishTypes: SMTSignalType[] = ['smt_bullish_divergence', 'false_break_up', 'volume_divergence_bullish', 'judas_swing_bullish'];
+    const bearishTypes: SMTSignalType[] = ['smt_bearish_divergence', 'false_break_down', 'volume_divergence_bearish', 'judas_swing_bearish'];
     
     if (bullishTypes.includes(type)) return 'bg-green-900 text-green-400';
     if (bearishTypes.includes(type)) return 'bg-red-900 text-red-400';
     return 'bg-blue-900 text-blue-400';
   };
 
-  const formatSignalName = (type: SMTSignalType) => {
-    return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const formatSignalName = (type: SMTSignalType): string => {
+    const nameMap: Record<SMTSignalType, string> = {
+      smt_bullish_divergence: 'SMT Bullish Divergence',
+      smt_bearish_divergence: 'SMT Bearish Divergence',
+      false_break_up: 'False Break Up',
+      false_break_down: 'False Break Down',
+      volume_spike: 'Volume Spike',
+      volume_divergence_bullish: 'Volume Divergence Bullish',
+      volume_divergence_bearish: 'Volume Divergence Bearish',
+      judas_swing_bullish: 'Judas Swing Bullish',
+      judas_swing_bearish: 'Judas Swing Bearish'
+    };
+    
+    return nameMap[type] || type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  const formatStrength = (strength: number) => `${(strength * 100).toFixed(0)}%`;
-  const formatPrice = (price: number) => `$${price.toFixed(2)}`;
-  const formatTime = (timestamp: string) => new Date(timestamp).toLocaleTimeString();
+  const formatStrength = (strength: number): string => {
+    if (typeof strength !== 'number' || isNaN(strength)) return '0%';
+    return `${Math.round(strength * 100)}%`;
+  };
+
+  const formatPrice = (price: number): string => {
+    if (typeof price !== 'number' || isNaN(price)) return 'N/A';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(price);
+  };
+
+  const formatTime = (timestamp: string): string => {
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return 'Invalid time';
+      return date.toLocaleTimeString();
+    } catch {
+      return 'Invalid time';
+    }
+  };
+
+  const formatPercentage = (percentage: number): string => {
+    if (typeof percentage !== 'number' || isNaN(percentage)) return '0.00%';
+    return `${percentage.toFixed(2)}%`;
+  };
+
+  const getSignalKey = (signal: SMTSignal): string => {
+    return signal.id || `${signal.timestamp}-${signal.signal_type}-${signal.strength}`;
+  };
+
+  const isValidSignal = (signal: SMTSignal): boolean => {
+    return !!(
+      signal &&
+      signal.signal_type &&
+      typeof signal.strength === 'number' &&
+      typeof signal.nasdaq_price === 'number' &&
+      typeof signal.sp500_price === 'number' &&
+      typeof signal.divergence_percentage === 'number' &&
+      signal.timestamp
+    );
+  };
+
+  const validSignals = signals.filter(isValidSignal);
 
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white flex items-center">
           <Activity className="w-5 h-5 mr-2 text-blue-400" />
-          SMT Signals ({signals.length})
+          SMT Signals ({validSignals.length})
         </h3>
         <button
           onClick={onRefresh}
           disabled={loading}
           className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg flex items-center text-sm transition-colors"
+          aria-label={loading ? 'Loading signals...' : 'Refresh signals'}
         >
           <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
           {loading ? 'Loading...' : 'Refresh'}
         </button>
       </div>
 
-      {signals.length === 0 ? (
+      {validSignals.length === 0 ? (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 text-center">
           <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <div className="text-gray-400 mb-2">No SMT Signals</div>
@@ -75,9 +132,9 @@ const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ signals, onRefresh, loadin
         </div>
       ) : (
         <div className="space-y-3 max-h-96 overflow-y-auto">
-          {signals.map((signal) => (
+          {validSignals.map((signal) => (
             <div
-              key={signal.id || `${signal.timestamp}-${signal.signal_type}`}
+              key={getSignalKey(signal)}
               className="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:border-blue-500/50 transition-colors"
             >
               <div className="flex items-center justify-between mb-3">
@@ -110,7 +167,7 @@ const SMTSignalsPanel = memo<SMTSignalsPanelProps>(({ signals, onRefresh, loadin
                 <div>
                   <span className="text-gray-400">Divergence:</span>
                   <span className="text-white font-medium ml-2">
-                    {signal.divergence_percentage.toFixed(2)}%
+                    {formatPercentage(signal.divergence_percentage)}
                   </span>
                 </div>
                 <div>
