@@ -1,46 +1,42 @@
-from typing import List
+from typing import List, Dict, Any
+import threading
 
 class SettingsManager:
-    """Singleton for dynamic SMT analysis settings updated via API"""
     _instance = None
+    _lock = threading.Lock()
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(SettingsManager, cls).__new__(cls)
-            cls._init_defaults(cls._instance)
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
         return cls._instance
 
-    @classmethod
-    def _init_defaults(cls, inst):
-        # Divergence detector
-        inst.min_divergence_threshold: float = 0.5
-        inst.lookback_period: int = 20
-        # MSS analyzer
-        inst.swing_threshold: float = 0.5
-        inst.lookback_swings: int = 5
-        # Order block detector
-        inst.min_block_size: float = 0.3
-        inst.volume_threshold: float = 1.5
-        # FVG detector
-        inst.min_fvg_gap_size: float = 0.2
-        # Quarterly analyzer
-        inst.quarterly_months: List[int] = [1, 4, 7, 10]
-        inst.monthly_bias_days: List[int] = [1, 2, 3]
+    def __init__(self):
+        if not self._initialized:
+            self._settings = {
+                "min_divergence_threshold": 0.5,
+                "lookback_period": 20,
+                "swing_threshold": 0.5,
+                "lookback_swings": 5,
+                "min_block_size": 0.3,
+                "volume_threshold": 1.5,
+                "min_fvg_gap_size": 0.2,
+                "quarterly_months": [1, 4, 7, 10],
+                "monthly_bias_days": [1, 2, 3],
+                "divergence_threshold": 0.5,  # Для совместимости с анализаторами
+                "confirmation_candles": 3,
+                "volume_multiplier": 1.5
+            }
+            self._initialized = True
 
-    def to_dict(self) -> dict:
-        return {
-            "min_divergence_threshold": self.min_divergence_threshold,
-            "lookback_period": self.lookback_period,
-            "swing_threshold": self.swing_threshold,
-            "lookback_swings": self.lookback_swings,
-            "min_block_size": self.min_block_size,
-            "volume_threshold": self.volume_threshold,
-            "min_fvg_gap_size": self.min_fvg_gap_size,
-            "quarterly_months": self.quarterly_months,
-            "monthly_bias_days": self.monthly_bias_days,
-        }
+    def get(self, key: str, default=None):
+        return self._settings.get(key, default)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self._settings.copy()
 
     def update(self, **kwargs):
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+        with self._lock:
+            self._settings.update(kwargs)
