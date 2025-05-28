@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 
 from app.services.market_data_collector import MarketDataCollector, MarketSnapshot
-from app.services.smt_analyzer import SMTAnalyzer, SMTSignal
+from backend.app.services.smart_money_service import SMTAnalyzer, SMTSignal
 from app.core.websocket_manager import WebSocketManager
 
 logger = logging.getLogger(__name__)

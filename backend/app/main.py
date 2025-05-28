@@ -15,7 +15,7 @@ from app.schemas import (
     AnalysisStatsResponse, SMTAnalysisFilter, SMTSignalType
 )
 from app.services.market_data_collector import MarketDataCollector
-from app.services.smt_analyzer import SmartMoneyAnalyzer
+from backend.app.services.smart_money_service import SmartMoneyAnalyzer
 from app.core.config import settings
 from app.core.websocket_manager import WebSocketManager
 from app.tasks.background_tasks import start_background_tasks
