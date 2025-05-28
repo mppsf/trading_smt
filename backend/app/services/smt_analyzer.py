@@ -92,51 +92,80 @@ class SMTDivergenceDetector(BaseAnalyzer):
                 return []
             
             signals = []
+            divergence_threshold = self.settings.get('divergence_threshold', 0.5)
+            confirmation_candles = self.settings.get('confirmation_candles', 3)
             
             # Bullish divergence: ES higher low, NQ lower low
             if (es_lows[-2].price < es_lows[-1].price and 
                 nq_lows[-2].price > nq_lows[-1].price):
                 div_pct = abs((es_lows[-1].price / es_lows[-2].price - 1) * 100)
-                signals.append(SMTSignal(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
-                    signal_type='smt_bullish_divergence',
-                    strength=min(div_pct / 2.0, 1.0),
-                    es_price=es_data[-1].close,
-                    nq_price=nq_data[-1].close,
-                    divergence_percentage=div_pct,
-                    confirmation_status=div_pct > 0.5,
-                    details={
-                        'es_low_prev': es_lows[-2].price,
-                        'es_low_curr': es_lows[-1].price,
-                        'nq_low_prev': nq_lows[-2].price,
-                        'nq_low_curr': nq_lows[-1].price
-                    }
-                ))
+                
+                if div_pct >= divergence_threshold:
+                    confirmation_status = self._check_confirmation(es_data, nq_data, confirmation_candles, 'bullish')
+                    
+                    signals.append(SMTSignal(
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        signal_type='smt_bullish_divergence',
+                        strength=min(div_pct / 2.0, 1.0),
+                        es_price=es_data[-1].close,
+                        nq_price=nq_data[-1].close,
+                        divergence_percentage=div_pct,
+                        confirmation_status=confirmation_status,
+                        details={
+                            'es_low_prev': es_lows[-2].price,
+                            'es_low_curr': es_lows[-1].price,
+                            'nq_low_prev': nq_lows[-2].price,
+                            'nq_low_curr': nq_lows[-1].price,
+                            'used_threshold': divergence_threshold,
+                            'confirmation_candles': confirmation_candles
+                        }
+                    ))
             
             # Bearish divergence: ES lower high, NQ higher high
             if (es_highs[-2].price > es_highs[-1].price and 
                 nq_highs[-2].price < nq_highs[-1].price):
                 div_pct = abs((es_highs[-1].price / es_highs[-2].price - 1) * 100)
-                signals.append(SMTSignal(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
-                    signal_type='smt_bearish_divergence',
-                    strength=min(div_pct / 2.0, 1.0),
-                    es_price=es_data[-1].close,
-                    nq_price=nq_data[-1].close,
-                    divergence_percentage=div_pct,
-                    confirmation_status=div_pct > 0.5,
-                    details={
-                        'es_high_prev': es_highs[-2].price,
-                        'es_high_curr': es_highs[-1].price,
-                        'nq_high_prev': nq_highs[-2].price,
-                        'nq_high_curr': nq_highs[-1].price
-                    }
-                ))
+                
+                if div_pct >= divergence_threshold:
+                    confirmation_status = self._check_confirmation(es_data, nq_data, confirmation_candles, 'bearish')
+                    
+                    signals.append(SMTSignal(
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        signal_type='smt_bearish_divergence',
+                        strength=min(div_pct / 2.0, 1.0),
+                        es_price=es_data[-1].close,
+                        nq_price=nq_data[-1].close,
+                        divergence_percentage=div_pct,
+                        confirmation_status=confirmation_status,
+                        details={
+                            'es_high_prev': es_highs[-2].price,
+                            'es_high_curr': es_highs[-1].price,
+                            'nq_high_prev': nq_highs[-2].price,
+                            'nq_high_curr': nq_highs[-1].price,
+                            'used_threshold': divergence_threshold,
+                            'confirmation_candles': confirmation_candles
+                        }
+                    ))
             
             return signals
         except Exception as e:
             logger.error(f"SMT divergence error: {e}")
             return []
+    
+    def _check_confirmation(self, es_data: List[OHLCVData], nq_data: List[OHLCVData], 
+                          confirmation_candles: int, direction: str) -> bool:
+        if len(es_data) < confirmation_candles or len(nq_data) < confirmation_candles:
+            return False
+        
+        recent_es = es_data[-confirmation_candles:]
+        recent_nq = nq_data[-confirmation_candles:]
+        
+        if direction == 'bullish':
+            return (all(bar.close >= bar.open for bar in recent_es[-2:]) and 
+                    all(bar.close >= bar.open for bar in recent_nq[-2:]))
+        else:
+            return (all(bar.close <= bar.open for bar in recent_es[-2:]) and 
+                    all(bar.close <= bar.open for bar in recent_nq[-2:]))
 
 class StopHuntDetector(BaseAnalyzer):
     def detect_false_breaks(self, data: List[OHLCVData]) -> List[SMTSignal]:
@@ -146,6 +175,8 @@ class StopHuntDetector(BaseAnalyzer):
             
             df = self._ohlcv_to_df(data)
             signals = []
+            volume_multiplier = self.settings.get('volume_multiplier', 1.5)
+            confirmation_candles = self.settings.get('confirmation_candles', 3)
             
             # Get key levels (PDH, PDL)
             daily_high = df['high'].rolling(24).max().iloc[-2] if len(df) > 24 else df['high'].max()
@@ -154,14 +185,21 @@ class StopHuntDetector(BaseAnalyzer):
             # Volume analysis
             avg_vol = df['volume'].rolling(20).mean().iloc[-1]
             vol_std = df['volume'].rolling(20).std().iloc[-1]
+            vol_threshold = avg_vol + volume_multiplier * vol_std
             
-            for i in range(-3, -1):
+            for i in range(-confirmation_candles-1, -1):
+                if i+confirmation_candles >= 0:
+                    continue
+                    
                 current = df.iloc[i]
-                next_bar = df.iloc[i+1] if i+1 < 0 else df.iloc[-1]
+                next_bars = df.iloc[i+1:i+1+confirmation_candles]
+                
+                if len(next_bars) < confirmation_candles:
+                    continue
                 
                 # False upward break
-                if (current['high'] > daily_high and next_bar['close'] < daily_high and
-                    current['volume'] > avg_vol + 1.5 * vol_std):
+                if (current['high'] > daily_high and current['volume'] > vol_threshold and
+                    all(bar['close'] < daily_high for _, bar in next_bars.iterrows())):
                     signals.append(SMTSignal(
                         timestamp=datetime.now(timezone.utc).isoformat(),
                         signal_type='false_break_up',
@@ -173,14 +211,15 @@ class StopHuntDetector(BaseAnalyzer):
                         details={
                             'level': daily_high,
                             'break_high': current['high'],
-                            'close_back': next_bar['close'],
-                            'volume_ratio': current['volume'] / avg_vol
+                            'confirmation_bars': confirmation_candles,
+                            'volume_ratio': current['volume'] / avg_vol,
+                            'volume_multiplier': volume_multiplier
                         }
                     ))
                 
                 # False downward break
-                if (current['low'] < daily_low and next_bar['close'] > daily_low and
-                    current['volume'] > avg_vol + 1.5 * vol_std):
+                if (current['low'] < daily_low and current['volume'] > vol_threshold and
+                    all(bar['close'] > daily_low for _, bar in next_bars.iterrows())):
                     signals.append(SMTSignal(
                         timestamp=datetime.now(timezone.utc).isoformat(),
                         signal_type='false_break_down',
@@ -192,8 +231,9 @@ class StopHuntDetector(BaseAnalyzer):
                         details={
                             'level': daily_low,
                             'break_low': current['low'],
-                            'close_back': next_bar['close'],
-                            'volume_ratio': current['volume'] / avg_vol
+                            'confirmation_bars': confirmation_candles,
+                            'volume_ratio': current['volume'] / avg_vol,
+                            'volume_multiplier': volume_multiplier
                         }
                     ))
             
@@ -215,25 +255,37 @@ class TrueOpenCalculator(BaseAnalyzer):
             now = datetime.now(timezone.utc)
             opens = {}
             
+            # Get session times from settings
+            london_open = self.settings.get('london_open', '08:00')
+            ny_open = self.settings.get('ny_open', '13:30')
+            asia_open = self.settings.get('asia_open', '00:00')
+            
             # Daily True Open (00:00 CME)
-            daily_start = now.replace(hour=6, minute=0, second=0, microsecond=0)  # CME midnight = UTC 6:00
+            daily_start = now.replace(hour=6, minute=0, second=0, microsecond=0)
             daily_data = df[df.index >= daily_start]
             if not daily_data.empty:
                 opens['daily'] = daily_data['open'].iloc[0]
             
             # Weekly True Open (Monday 18:00 CME)
             week_start = now - timedelta(days=now.weekday())
-            week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)  # Monday CME 18:00 = Tuesday UTC 00:00
+            week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
             weekly_data = df[df.index >= week_start]
             if not weekly_data.empty:
                 opens['weekly'] = weekly_data['open'].iloc[0]
             
-            # Quarterly True Open (first Monday of quarter)
+            # Quarterly True Open
             quarter_month = ((now.month - 1) // 3) * 3 + 1
             quarter_start = datetime(now.year, quarter_month, 1, tzinfo=timezone.utc)
             quarterly_data = df[df.index >= quarter_start]
             if not quarterly_data.empty:
                 opens['quarterly'] = quarterly_data['open'].iloc[0]
+            
+            # Session opens
+            opens['session_times'] = {
+                'london': london_open,
+                'ny': ny_open,
+                'asia': asia_open
+            }
             
             return opens
         except Exception as e:
@@ -250,25 +302,35 @@ class VolumeAnomalyDetector(BaseAnalyzer):
             vol_sma = df['volume'].rolling(20).mean()
             vol_std = df['volume'].rolling(20).std()
             
+            volume_multiplier = self.settings.get('volume_multiplier', 1.5)
+            confirmation_candles = self.settings.get('confirmation_candles', 3)
+            
             signals = []
             
             for i in range(-5, 0):
+                if i + confirmation_candles >= 0:
+                    continue
+                    
                 current = df.iloc[i]
-                vol_threshold = vol_sma.iloc[i] + 0.5 * vol_std.iloc[i]
+                vol_threshold = vol_sma.iloc[i] + volume_multiplier * vol_std.iloc[i]
                 
-                # Volume spike
                 if current['volume'] > vol_threshold:
-                    # Volume divergence check
+                    # Volume divergence check with confirmation
+                    next_bars = df.iloc[i+1:i+1+confirmation_candles] if i+confirmation_candles < 0 else df.iloc[i+1:]
+                    
                     prev_high = df['high'].iloc[i-1] if i > -len(df) else current['high']
                     prev_low = df['low'].iloc[i-1] if i > -len(df) else current['low']
                     prev_vol = df['volume'].iloc[i-1] if i > -len(df) else current['volume']
                     
+                    signal_type = 'volume_spike'
+                    confirmation_status = len(next_bars) >= confirmation_candles
+                    
                     if current['high'] > prev_high and current['volume'] < prev_vol:
                         signal_type = 'volume_divergence_bearish'
+                        confirmation_status = confirmation_status and all(bar['close'] <= bar['open'] for _, bar in next_bars.iterrows())
                     elif current['low'] < prev_low and current['volume'] < prev_vol:
                         signal_type = 'volume_divergence_bullish'
-                    else:
-                        signal_type = 'volume_spike'
+                        confirmation_status = confirmation_status and all(bar['close'] >= bar['open'] for _, bar in next_bars.iterrows())
                     
                     signals.append(SMTSignal(
                         timestamp=datetime.now(timezone.utc).isoformat(),
@@ -277,11 +339,13 @@ class VolumeAnomalyDetector(BaseAnalyzer):
                         es_price=current['close'],
                         nq_price=current['close'],
                         divergence_percentage=0.0,
-                        confirmation_status=current['volume'] > vol_threshold * 2,
+                        confirmation_status=confirmation_status,
                         details={
                             'volume': current['volume'],
                             'avg_volume': vol_sma.iloc[i],
-                            'volume_ratio': current['volume'] / vol_sma.iloc[i]
+                            'volume_ratio': current['volume'] / vol_sma.iloc[i],
+                            'volume_multiplier': volume_multiplier,
+                            'confirmation_candles': confirmation_candles
                         }
                     ))
             
@@ -299,27 +363,32 @@ class ManipulationPhaseDetector(BaseAnalyzer):
             df = self._ohlcv_to_df(data)
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             
-            # Quarterly cycle detection (simplified)
+            confirmation_candles = self.settings.get('confirmation_candles', 3)
+            
+            # Quarterly cycle detection
             now = datetime.now(timezone.utc)
             quarter_start = datetime(now.year, ((now.month - 1) // 3) * 3 + 1, 1, tzinfo=timezone.utc)
             days_in_quarter = (now - quarter_start).days
-            quarter_length = 90  # approximate
+            quarter_length = 90
             
             # Q2 phase detection (25% - 50% of quarter)
             if 0.25 * quarter_length <= days_in_quarter <= 0.5 * quarter_length:
-                # Look for Judas Swing
-                q1_end_idx = int(len(df) * 0.75)  # Q1 period
+                q1_end_idx = int(len(df) * 0.75)
                 q1_high = df['high'].iloc[:q1_end_idx].max()
                 q1_low = df['low'].iloc[:q1_end_idx].min()
                 
-                recent_data = df.iloc[-10:]  # Last 10 bars
+                recent_data = df.iloc[-10-confirmation_candles:]
                 
-                for i in range(len(recent_data) - 2):
+                for i in range(len(recent_data) - confirmation_candles - 1):
                     current = recent_data.iloc[i]
-                    next_bar = recent_data.iloc[i + 1]
+                    confirmation_bars = recent_data.iloc[i+1:i+1+confirmation_candles]
                     
-                    # Judas Swing up then down
-                    if (current['high'] > q1_high and next_bar['close'] < q1_high):
+                    if len(confirmation_bars) < confirmation_candles:
+                        continue
+                    
+                    # Judas Swing up then down with confirmation
+                    if (current['high'] > q1_high and 
+                        all(bar['close'] < q1_high for _, bar in confirmation_bars.iterrows())):
                         return [SMTSignal(
                             timestamp=datetime.now(timezone.utc).isoformat(),
                             signal_type='judas_swing_bearish',
@@ -331,13 +400,14 @@ class ManipulationPhaseDetector(BaseAnalyzer):
                             details={
                                 'q1_high': q1_high,
                                 'break_high': current['high'],
-                                'return_close': next_bar['close'],
-                                'quarter_phase': 'Q2'
+                                'quarter_phase': 'Q2',
+                                'confirmation_candles': confirmation_candles
                             }
                         )]
                     
-                    # Judas Swing down then up
-                    if (current['low'] < q1_low and next_bar['close'] > q1_low):
+                    # Judas Swing down then up with confirmation
+                    if (current['low'] < q1_low and 
+                        all(bar['close'] > q1_low for _, bar in confirmation_bars.iterrows())):
                         return [SMTSignal(
                             timestamp=datetime.now(timezone.utc).isoformat(),
                             signal_type='judas_swing_bullish',
@@ -349,8 +419,8 @@ class ManipulationPhaseDetector(BaseAnalyzer):
                             details={
                                 'q1_low': q1_low,
                                 'break_low': current['low'],
-                                'return_close': next_bar['close'],
-                                'quarter_phase': 'Q2'
+                                'quarter_phase': 'Q2',
+                                'confirmation_candles': confirmation_candles
                             }
                         )]
             
@@ -362,6 +432,7 @@ class ManipulationPhaseDetector(BaseAnalyzer):
 class SmartMoneyAnalyzer:
     def __init__(self):
         self.redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        self.settings = SettingsManager()
         self.smt_detector = SMTDivergenceDetector()
         self.stop_hunt_detector = StopHuntDetector()
         self.true_open_calc = TrueOpenCalculator()
@@ -378,6 +449,12 @@ class SmartMoneyAnalyzer:
                 return []
 
             all_signals = []
+            smt_strength_threshold = self.settings.get('smt_strength_threshold', 0.7)
+            
+            # Check if we're in active trading session
+            if not self._is_active_session():
+                logger.info("Outside active trading sessions, reducing signal generation")
+                return []
             
             # SMT Divergence detection
             all_signals.extend(self.smt_detector.detect_smt_divergence(
@@ -394,19 +471,53 @@ class SmartMoneyAnalyzer:
             # Manipulation Phase
             all_signals.extend(self.manipulation_detector.detect_manipulation_phase(es_data.ohlcv_1d))
             
+            # Filter by strength threshold
+            strength_filtered = [s for s in all_signals if s.strength >= smt_strength_threshold]
+            
             # True Open filtering
             es_opens = self.true_open_calc.get_true_opens(es_data.ohlcv_1d)
             nq_opens = self.true_open_calc.get_true_opens(nq_data.ohlcv_1d)
             
-            filtered_signals = self._filter_by_true_open(all_signals, es_opens, nq_opens)
+            filtered_signals = self._filter_by_true_open(strength_filtered, es_opens, nq_opens)
             
-            await self._cache_signals(filtered_signals)
-            logger.info(f"Generated {len(filtered_signals)} Smart Money signals")
-            return filtered_signals
+            # Apply max display limit
+            max_signals = self.settings.get('max_signals_display', 10)
+            final_signals = sorted(filtered_signals, key=lambda x: x.strength, reverse=True)[:max_signals]
+            
+            await self._cache_signals(final_signals)
+            logger.info(f"Generated {len(final_signals)} Smart Money signals (filtered from {len(all_signals)})")
+            return final_signals
             
         except Exception as e:
             logger.error(f"Smart Money analysis error: {e}")
             return []
+
+    def _is_active_session(self) -> bool:
+        """Check if current time is within active trading sessions"""
+        try:
+            now = datetime.now(timezone.utc)
+            current_time = now.time()
+            
+            london_open = datetime.strptime(self.settings.get('london_open', '08:00'), '%H:%M').time()
+            ny_open = datetime.strptime(self.settings.get('ny_open', '13:30'), '%H:%M').time()
+            asia_open = datetime.strptime(self.settings.get('asia_open', '00:00'), '%H:%M').time()
+            
+            # London session: 08:00-16:00 UTC
+            london_close = time(16, 0)
+            # NY session: 13:30-22:00 UTC  
+            ny_close = time(22, 0)
+            # Asia session: 00:00-09:00 UTC
+            asia_close = time(9, 0)
+            
+            # Check if in any active session
+            return (
+                (london_open <= current_time <= london_close) or
+                (ny_open <= current_time <= ny_close) or
+                (asia_open <= current_time <= asia_close)
+            )
+        except Exception as e:
+            logger.error(f"Session check error: {e}")
+            return True  # Default to active if error
 
     def _filter_by_true_open(self, signals: List[SMTSignal], es_opens: Dict, nq_opens: Dict) -> List[SMTSignal]:
         if not es_opens.get('daily') or not nq_opens.get('daily'):
@@ -435,7 +546,13 @@ class SmartMoneyAnalyzer:
             cached = await self.redis_client.get("smart_money_signals")
             if cached:
                 data = json.loads(cached)
-                return [SMTSignal(**s) for s in data][:limit]
+                signals = [SMTSignal(**s) for s in data]
+                
+                # Apply current strength threshold filter
+                smt_strength_threshold = self.settings.get('smt_strength_threshold', 0.7)
+                filtered_signals = [s for s in signals if s.strength >= smt_strength_threshold]
+                
+                return filtered_signals[:limit]
         except Exception as e:
             logger.error(f"Cache error: {e}")
         return []
