@@ -10,20 +10,10 @@ from app.schemas.schemas import (
 from app.services.market_data_collector import MarketDataCollector
 from app.services.smart_money_service import SmartMoneyService
 from app.core.data_models import OHLCV
+from app.utils.market_utils import get_current_market_phase
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["smt-analysis"])
-
-def get_current_market_phase():
-    now = datetime.now(timezone.utc)
-    hour = now.hour
-    if 8 <= hour < 16:
-        return "london"
-    elif 13 <= hour < 21:
-        return "new_york"
-    elif 23 <= hour or hour < 8:
-        return "asia"
-    return "overlap"
 
 def convert_snapshot_to_ohlcv(snapshot_data):
     """Конвертация данных из MarketSnapshot в список OHLCV"""
@@ -81,11 +71,13 @@ async def get_smt_signals(
                 details=getattr(signal, 'details', {})
             ))
         
+        market_phase = await get_current_market_phase()
+        
         return SMTAnalysisResponse(
             signals=result_signals,
             total_count=len(result_signals),
             analysis_timestamp=datetime.now(timezone.utc).isoformat(),
-            market_phase=get_current_market_phase()
+            market_phase=market_phase
         )
         
     except Exception as e:
@@ -133,10 +125,7 @@ async def get_true_opens():
         if not es_data or not nq_data:
             raise HTTPException(status_code=404, detail="Market data not available")
         
-        # Простая реализация True Opens на основе дневных данных
         timestamp = datetime.now(timezone.utc).isoformat()
-        
-        # Используем последние цены как True Opens
         es_price = es_data.current_price
         nq_price = nq_data.current_price
         
@@ -176,10 +165,7 @@ async def get_fractals(
             if not cached_data:
                 continue
             
-            # Конвертируем данные для анализа
             ohlcv_data = convert_snapshot_to_ohlcv(cached_data)
-            
-            # Используем базовый метод для получения фракталов
             high_fractals, low_fractals = smt_service.smt_analyzer._get_fractals(ohlcv_data, 2)
             
             result.append(FractalsResponse(
