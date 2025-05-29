@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from app.core.data_models import OHLCV, Signal
 from app.core.settings_manager import SettingsManager
 
@@ -12,7 +12,18 @@ class BaseAnalyzer(ABC):
     def analyze(self, *args, **kwargs) -> List[Signal]:
         pass
     
-    def _get_fractals(self, data: List[OHLCV], period: int = 2) -> Tuple[List[Tuple], List[Tuple]]:
+    def _merge_settings(self, custom_params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Объединить базовые настройки с кастомными параметрами"""
+        merged_settings = self.settings.copy()
+        if custom_params:
+            merged_settings.update(custom_params)
+        return merged_settings
+    
+    def _get_fractals(self, data: List[OHLCV], period: int = None, custom_params: Optional[Dict[str, Any]] = None) -> Tuple[List[Tuple], List[Tuple]]:
+        settings = self._merge_settings(custom_params)
+        if period is None:
+            period = settings.get('fractal_period', 2)
+            
         if len(data) < period * 2 + 1:
             return [], []
         
@@ -29,7 +40,7 @@ class BaseAnalyzer(ABC):
             if is_high_fractal:
                 highs.append((i, data[i].high, data[i].timestamp))
             
-            # Низкие фракталы
+            # Низкие фракtalы
             is_low_fractal = True
             for j in range(i - period, i + period + 1):
                 if j != i and data[j].low <= data[i].low:
@@ -39,4 +50,5 @@ class BaseAnalyzer(ABC):
             if is_low_fractal:
                 lows.append((i, data[i].low, data[i].timestamp))
         
-        return highs[-20:], lows[-20:]
+        fractal_limit = settings.get('fractal_limit', 20)
+        return highs[-fractal_limit:], lows[-fractal_limit:]

@@ -77,3 +77,4 @@ class SmartMoneyService:
             logger.error(f"Cache retrieval error: {e}")
         return []
 
+    
