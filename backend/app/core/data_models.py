@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 @dataclass
 class OHLCV:
@@ -11,36 +12,60 @@ class OHLCV:
     volume: int
 
 @dataclass
-class TechnicalData:
-    rsi: float = 50.0
-    sma_20: float = 0.0
-    ema_12: float = 0.0
-    ema_26: float = 0.0
-    macd: float = 0.0
-    macd_signal: float = 0.0
-    bollinger_upper: float = 0.0
-    bollinger_lower: float = 0.0
-    atr: float = 0.0
-
-@dataclass
-class MarketData:
-    symbol: str
-    price: float
-    change_pct: float
-    volume: int
-    timestamp: str
-    ohlcv_5m: List[OHLCV]
-    ohlcv_15m: List[OHLCV]
-    technical: TechnicalData
-    market_state: str
-
-@dataclass
 class Signal:
     timestamp: str
     type: str
     strength: float
-    es_price: float
-    nq_price: float
+    details: Dict[str, Any] = None
+    
+    def __post_init__(self):
+        if self.details is None:
+            self.details = {}
+
+@dataclass
+class MarketData:
+    symbol: str
+    current_price: float
+    change_percent: float
+    volume: int
+    timestamp: str
+    ohlcv_5m: List[OHLCV]
+    ohlcv_15m: List[OHLCV]
+    market_state: str
+
+@dataclass
+class TechnicalLevel:
+    price: float
+    level_type: str  # support, resistance, pivot
+    strength: float
+    timestamp: str
+    touches: int = 0
+
+@dataclass
+class VolumeProfile:
+    price_level: float
+    volume: int
+    percentage: float
+
+@dataclass
+class OrderFlow:
+    timestamp: str
+    bid_volume: int
+    ask_volume: int
+    delta: int
+    cumulative_delta: int
+
+@dataclass
+class SmartMoneySignal(Signal):
+    es_price: float = 0.0
+    nq_price: float = 0.0
     divergence_pct: float = 0.0
     confirmed: bool = False
-    details: Optional[Dict[str, Any]] = None
+    killzone: Optional[str] = None
+
+@dataclass
+class VolumeSignal(Signal):
+    volume_ratio: float = 0.0
+    average_volume: float = 0.0
+    current_volume: float = 0.0
+    volume_spike: bool = False
